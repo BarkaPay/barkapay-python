@@ -209,8 +209,10 @@ class NetworkError(PayHubError):
             find out whether the request reached the API.
     """
 
-    def __init__(self, message: str = "", *, request_id: str | None = None) -> None:
-        super().__init__(message)
+    def __init__(self, *args: object, request_id: str | None = None) -> None:
+        # *args as in 1.0.0 (a plain Exception): a custom transport may raise
+        # NetworkError(...) with any arguments.
+        super().__init__(*args)
         self.request_id = request_id
 
 
