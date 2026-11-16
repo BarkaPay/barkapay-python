@@ -6,8 +6,8 @@ import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
-from payhub import PayHub
-from payhub.http import Request, Response
+from barkapay import BarkaPay
+from barkapay.http import Request, Response
 
 
 class EchoTransport:
@@ -45,7 +45,7 @@ class EchoTransport:
 
 def test_concurrent_calls_do_not_interfere() -> None:
     transport = EchoTransport()
-    client = PayHub(api_key="pk:sk", country="bf", transport=transport)
+    client = BarkaPay(api_key="pk:sk", country="bf", transport=transport)
     countries = ["bf", "bj", "sn"]
 
     def work(n: int) -> tuple[str, str, str]:
@@ -66,7 +66,7 @@ def test_concurrent_calls_do_not_interfere() -> None:
 
 def test_calls_really_overlap_inside_the_transport() -> None:
     transport = EchoTransport()
-    client = PayHub(api_key="pk:sk", country="bf", transport=transport)
+    client = BarkaPay(api_key="pk:sk", country="bf", transport=transport)
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         futures = [pool.submit(client.payments.get, "warmup") for _ in range(8)]
@@ -77,7 +77,7 @@ def test_calls_really_overlap_inside_the_transport() -> None:
 
 def test_client_configuration_is_not_mutated_by_calls() -> None:
     transport = EchoTransport()
-    client = PayHub(api_key="pk:sk", country="bf", transport=transport)
+    client = BarkaPay(api_key="pk:sk", country="bf", transport=transport)
     before = (client._api.base_url, client._api.default_country, client._api._max_retries)
     client.payments.get("A", country="sn")
     client.payments.get("B")

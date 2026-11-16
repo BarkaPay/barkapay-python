@@ -6,7 +6,7 @@ from decimal import Decimal
 
 import pytest
 
-from payhub import (
+from barkapay import (
     NotFoundError,
     Payment,
     PaymentLink,
@@ -17,7 +17,7 @@ from payhub import (
     PaymentStatus,
     ValidationError,
 )
-from payhub.http import Response
+from barkapay.http import Response
 from tests import samples
 from tests.support import json_response, make_client, ok, sent_json
 
@@ -58,7 +58,7 @@ def test_create_posts_the_params_and_returns_the_link() -> None:
     assert isinstance(link, PaymentLink)
     assert link.public_id == samples.LINK_ID
     assert link.slug == samples.LINK_SLUG
-    assert link.url == f"https://checkout.payhub.africa/{samples.LINK_SLUG}"
+    assert link.url == f"https://checkout.barkapay.com/{samples.LINK_SLUG}"
     assert link.status is PaymentLinkStatus.ACTIVE
     assert link.raw_status == "active"
     assert link.source == "api"

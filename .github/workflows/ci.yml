@@ -108,13 +108,13 @@ jobs:
           import importlib.metadata as metadata
           import importlib.resources as resources
 
-          import payhub
+          import barkapay
 
-          assert metadata.version("barkapay-payhub") == payhub.__version__, payhub.__version__
-          runtime = [r for r in (metadata.requires("barkapay-payhub") or []) if "extra ==" not in r]
+          assert metadata.version("barkapay") == barkapay.__version__, barkapay.__version__
+          runtime = [r for r in (metadata.requires("barkapay") or []) if "extra ==" not in r]
           assert runtime == [], f"runtime dependencies crept in: {runtime}"
-          assert resources.files("payhub").joinpath("py.typed").is_file(), "py.typed missing"
-          client = payhub.PayHub(api_key="key_id:secret", country="bf")
+          assert resources.files("barkapay").joinpath("py.typed").is_file(), "py.typed missing"
+          client = barkapay.BarkaPay(api_key="key_id:secret", country="bf")
           assert hasattr(client, "payment_links")
-          print("barkapay-payhub", payhub.__version__, "OK")
+          print("barkapay", barkapay.__version__, "OK")
           PY

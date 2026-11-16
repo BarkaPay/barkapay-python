@@ -44,7 +44,7 @@ distribution and checks it (`twine check`, `py.typed` present in the wheel).
 
 ## Releasing (maintainers)
 
-1. Bump `src/payhub/_version.py` and move the `[Unreleased]` notes of
+1. Bump `src/barkapay/_version.py` and move the `[Unreleased]` notes of
    `CHANGELOG.md` under the new version.
 2. Merge to `main` and wait for CI to be green.
 3. Tag and push — the tag must equal the version:

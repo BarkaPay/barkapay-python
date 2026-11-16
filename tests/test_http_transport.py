@@ -17,8 +17,15 @@ from typing import Any
 
 import pytest
 
-from payhub import ApiError, ConfigurationError, NetworkError, PayHub, UrllibTransport
-from payhub.http import MAX_RESPONSE_BYTES, Request, assert_safe_url, is_loopback_host
+from barkapay import (
+    ApiError,
+    BarkaPay,
+    ConfigurationError,
+    NetworkError,
+    UrllibTransport,
+    __version__,
+)
+from barkapay.http import MAX_RESPONSE_BYTES, Request, assert_safe_url, is_loopback_host
 
 KEY = "pk_live_abc123:sk_live_SUPERSECRET"
 
@@ -229,7 +236,7 @@ def test_timeout_must_be_a_positive_number(timeout: object) -> None:
 def test_default_timeouts() -> None:
     assert UrllibTransport().timeout == 40.0
     assert UrllibTransport(12).timeout == 12.0
-    client = PayHub(api_key=KEY, country="bf", timeout=7.5)
+    client = BarkaPay(api_key=KEY, country="bf", timeout=7.5)
     assert isinstance(client._api._transport, UrllibTransport)
     assert client._api._transport.timeout == 7.5
 
@@ -270,7 +277,7 @@ def test_round_trip_sends_headers_and_body_and_reads_the_envelope(
             {
                 "Authorization": f"Bearer {KEY}",
                 "Content-Type": "application/json",
-                "User-Agent": "payhub-python/test",
+                "User-Agent": "barkapay-python/test",
             },
             '{"amount":10000,"note":"Café"}',
         )
@@ -284,7 +291,7 @@ def test_round_trip_sends_headers_and_body_and_reads_the_envelope(
     assert seen["path"] == "/bf/v1/payments"
     assert seen["headers"]["authorization"] == f"Bearer {KEY}"
     assert seen["headers"]["content-type"] == "application/json"
-    assert seen["headers"]["user-agent"] == "payhub-python/test"
+    assert seen["headers"]["user-agent"] == "barkapay-python/test"
     assert seen["body"] == '{"amount":10000,"note":"Café"}'.encode()
 
 
@@ -314,7 +321,7 @@ def test_redirects_are_never_followed_and_the_key_never_reaches_another_host(
     )
     servers.append(api)
 
-    client = PayHub(api_key=KEY, country="bf", base_url=_url(api), max_retries=0, timeout=5)
+    client = BarkaPay(api_key=KEY, country="bf", base_url=_url(api), max_retries=0, timeout=5)
     with pytest.raises(ApiError) as exc_info:
         if method == "GET":
             client.ping()
@@ -424,11 +431,11 @@ def test_end_to_end_through_the_client(servers: list[HTTPServer]) -> None:
 
     server, recorder = _serve(handler)
     servers.append(server)
-    client = PayHub(api_key=KEY, country="bf", base_url=_url(server), timeout=5)
+    client = BarkaPay(api_key=KEY, country="bf", base_url=_url(server), timeout=5)
 
     assert client.balance.get().available == "1500.00"
     seen = recorder.requests[0]["headers"]
     assert seen["authorization"] == f"Bearer {KEY}"
     assert seen["accept"] == "application/json"
-    assert seen["user-agent"].startswith("payhub-python/1.1.0 python/")
+    assert seen["user-agent"].startswith(f"barkapay-python/{__version__} python/")
     assert len(seen["x-request-id"]) == 36

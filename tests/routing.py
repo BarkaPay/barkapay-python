@@ -8,7 +8,7 @@ import re
 import threading
 from typing import Any
 
-from payhub.http import Request, Response
+from barkapay.http import Request, Response
 from tests import samples
 
 _PREFIX = r"^https://hub\.barkapay\.com/(bf|bj|sn)/v1"

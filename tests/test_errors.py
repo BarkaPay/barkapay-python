@@ -6,14 +6,14 @@ from typing import Any
 
 import pytest
 
-from payhub import (
+from barkapay import (
     ApiError,
     AuthenticationError,
     AuthorizationError,
+    BarkaPayError,
     ConflictError,
     InsufficientBalanceError,
     NotFoundError,
-    PayHubError,
     PaymentFailedError,
     PaymentStatus,
     RateLimitError,
@@ -68,7 +68,7 @@ def test_every_documented_code_maps_to_its_class(
 ) -> None:
     error = _raise(status, {"status": "failed", "code": code, "message": "m"})
     assert type(error) is expected
-    assert isinstance(error, PayHubError)
+    assert isinstance(error, BarkaPayError)
     assert error.code == code
     assert error.http_status == status
 

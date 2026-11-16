@@ -47,9 +47,11 @@ MAX_RESPONSE_BYTES = 10 * 1024 * 1024
 class Request:
     """An outbound HTTP request — a plain value object.
 
-    ``repr()`` masks credential headers, so printing or logging the object
-    does not show the API key. The ``headers`` mapping itself holds the real
-    values (a transport needs them): never log it as is.
+    ``repr()`` masks credential headers and replaces the body by its size, so
+    printing or logging the object shows neither the API key nor what the body
+    carries (an OTP, a phone number). The ``headers`` and ``body`` attributes
+    themselves hold the real values (a transport needs them): never log them
+    as is.
     """
 
     method: str
@@ -64,8 +66,14 @@ class Request:
         }
         return (
             f"Request(method={self.method!r}, url={self.url!r}, "
-            f"headers={safe_headers!r}, body={self.body!r})"
+            f"headers={safe_headers!r}, body={_body_summary(self.body)})"
         )
+
+
+def _body_summary(body: str | None) -> str:
+    if body is None:
+        return "None"
+    return f"'[{len(body.encode('utf-8'))} bytes]'"
 
 
 @dataclass(frozen=True)
@@ -84,7 +92,7 @@ class Transport(Protocol):
     Implement it as a function ``def transport(request: Request) -> Response`` or
     as any object with a matching ``__call__``. Return a :class:`Response` for
     every HTTP status (including 4xx/5xx) and raise
-    :class:`~payhub.errors.NetworkError` when no response was obtained. A
+    :class:`~barkapay.errors.NetworkError` when no response was obtained. A
     transport must not follow redirects and must verify TLS certificates.
     """
 
@@ -108,7 +116,7 @@ def assert_safe_url(url: str, *, allow_plain_http: bool = False) -> None:
 
     Allowed: ``https://host[:port]/…``, and ``http://`` for loopback hosts
     only. Everything else — other schemes, embedded credentials, missing host
-    — raises :class:`~payhub.errors.ConfigurationError`.
+    — raises :class:`~barkapay.errors.ConfigurationError`.
 
     :param allow_plain_http: also accept ``http://`` for any host. Never used
         by :class:`UrllibTransport`; the client uses it for the ``base_url``

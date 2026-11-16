@@ -10,7 +10,7 @@ import time
 
 import pytest
 
-from payhub import ConfigurationError, SignatureVerificationError, webhook
+from barkapay import ConfigurationError, SignatureVerificationError, webhook
 
 SECRET = "whsec_test_secret"
 # Body exactly as rifle serialises it (unescaped slashes and unicode).
@@ -210,7 +210,7 @@ def test_verification_uses_a_constant_time_comparison(monkeypatch: pytest.Monkey
         calls.append((a, b))
         return real(a, b)
 
-    monkeypatch.setattr("payhub.webhook.hmac.compare_digest", spy)
+    monkeypatch.setattr("barkapay.webhook.hmac.compare_digest", spy)
     ts = int(time.time())
     good = _digest(BODY, ts)
     assert webhook.verify(BODY, f"t={ts},v1={good},v1={'a' * 64}", SECRET) is True

@@ -87,7 +87,7 @@ def payment_link(**overrides: Any) -> dict[str, Any]:
     base: dict[str, Any] = {
         "public_id": LINK_ID,
         "slug": LINK_SLUG,
-        "url": f"https://checkout.payhub.africa/{LINK_SLUG}",
+        "url": f"https://checkout.barkapay.com/{LINK_SLUG}",
         "status": "active",
         "source": "api",
         "usage": "multi",

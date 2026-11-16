@@ -14,14 +14,14 @@ from pathlib import Path
 
 EXPECTED_METADATA_VERSION = "2.4"
 REQUIRED_IN_WHEEL = (
-    "payhub/__init__.py",
-    "payhub/py.typed",
-    "payhub/client.py",
-    "payhub/resources.py",
-    "payhub/webhook.py",
+    "barkapay/__init__.py",
+    "barkapay/py.typed",
+    "barkapay/client.py",
+    "barkapay/resources.py",
+    "barkapay/webhook.py",
 )
 REQUIRED_IN_SDIST = (
-    "src/payhub/py.typed",
+    "src/barkapay/py.typed",
     "README.md",
     "LICENSE",
     "CHANGELOG.md",
@@ -54,7 +54,7 @@ def main() -> None:
     for required in REQUIRED_IN_WHEEL:
         if required not in names:
             fail(f"{required} is missing from the wheel")
-    stray = [n for n in names if not (n.startswith("payhub/") or ".dist-info/" in n)]
+    stray = [n for n in names if not (n.startswith("barkapay/") or ".dist-info/" in n)]
     if stray:
         fail(f"unexpected files in the wheel: {stray}")
 
@@ -80,14 +80,14 @@ def main() -> None:
         fail("Requires-Python is not >=3.9")
     if expected is not None and version != expected:
         fail(f"built version {version} does not match the expected {expected}")
-    if wheel.name != f"barkapay_payhub-{version}-py3-none-any.whl":
+    if wheel.name != f"barkapay-{version}-py3-none-any.whl":
         fail(f"unexpected wheel file name {wheel.name} for version {version}")
-    if sdist.name != f"barkapay_payhub-{version}.tar.gz":
+    if sdist.name != f"barkapay-{version}.tar.gz":
         fail(f"unexpected sdist file name {sdist.name} for version {version}")
 
     with tarfile.open(sdist) as archive:
         sdist_names = archive.getnames()
-    root = f"barkapay_payhub-{version}/"
+    root = f"barkapay-{version}/"
     for required in REQUIRED_IN_SDIST:
         if root + required not in sdist_names:
             fail(f"{required} is missing from the sdist")

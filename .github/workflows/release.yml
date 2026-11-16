@@ -3,11 +3,20 @@ name: Release
 # Publishes to PyPI when a version tag (vX.Y.Z) is pushed.
 #
 # Auth: PyPI Trusted Publishing (OIDC) — no token is stored anywhere. The PyPI
-# project "barkapay-payhub" trusts this exact workflow file (release.yml) in
-# BarkaPay/payhub-python running in the `pypi` environment. Renaming the file
-# or the environment breaks publishing until PyPI is updated.
+# project "barkapay" trusts this exact workflow file (release.yml) in
+# BarkaPay/barkapay-python running in the `pypi` environment. Renaming the file,
+# the repository or the environment breaks publishing until PyPI is updated.
 #
-# Cut a release: bump src/payhub/_version.py, update CHANGELOG.md, merge to
+# First release of the "barkapay" project (2.0.0): the project does not exist
+# yet, so register a *pending* publisher before pushing the tag —
+#   pypi.org → Your account → Publishing → "Add a new pending publisher" →
+#   GitHub: PyPI project name `barkapay`, owner `BarkaPay`, repository
+#   `barkapay-python`, workflow `release.yml`, environment `pypi`.
+# The first successful publish turns it into the project's trusted publisher.
+# The repository must already be named `barkapay-python` when the tag is pushed
+# (the OIDC token carries the repository name).
+#
+# Cut a release: bump src/barkapay/_version.py, update CHANGELOG.md, merge to
 # main, then
 #     git tag vX.Y.Z && git push origin vX.Y.Z
 #
@@ -78,9 +87,9 @@ jobs:
       - name: Read the package version
         id: version
         run: |
-          pkg="$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9]+)*' src/payhub/_version.py | head -1)"
+          pkg="$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9]+)*' src/barkapay/_version.py | head -1)"
           if [ -z "$pkg" ]; then
-            echo "::error::Could not read the version from src/payhub/_version.py"
+            echo "::error::Could not read the version from src/barkapay/_version.py"
             exit 1
           fi
           echo "value=$pkg" >> "$GITHUB_OUTPUT"
@@ -132,7 +141,7 @@ jobs:
     timeout-minutes: 10
     environment:
       name: pypi
-      url: https://pypi.org/project/barkapay-payhub/
+      url: https://pypi.org/project/barkapay/
     permissions:
       id-token: write # OIDC trusted publishing — the only permission of this job
     steps:

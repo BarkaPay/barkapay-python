@@ -58,7 +58,7 @@ class Payment:
     #: Operator-side handle handed back at creation (OTP transaction id,
     #: checkout session id…). ``None`` until the operator answers.
     provider_reference: str | None = None
-    #: Stable failure code (see :class:`payhub.ReasonCode`); ``None`` unless
+    #: Stable failure code (see :class:`barkapay.ReasonCode`); ``None`` unless
     #: the payment failed or expired.
     reason_code: str | None = None
     #: The operator's own sentence, for support/debugging. Not contractual.
@@ -135,7 +135,7 @@ class Transfer:
     #: Operator-side handle for this payout (lines it up with the operator
     #: statement). ``None`` until known.
     provider_reference: str | None = None
-    #: Stable failure code (see :class:`payhub.ReasonCode`); ``None`` unless
+    #: Stable failure code (see :class:`barkapay.ReasonCode`); ``None`` unless
     #: the transfer failed.
     reason_code: str | None = None
     #: The operator's own sentence, for support/debugging. Not contractual.

@@ -3,9 +3,9 @@ payment links and disbursements behind one contract.
 
 Quick start::
 
-    import payhub
+    import barkapay
 
-    client = payhub.PayHub(api_key="key_id:secret", country="bf")
+    client = barkapay.BarkaPay(api_key="key_id:secret", country="bf")
     payment = client.payments.create({
         "operator": "ORANGE",
         "phone_number": "74123456",
@@ -20,18 +20,18 @@ from __future__ import annotations
 
 from . import webhook
 from ._version import __version__
-from .client import PayHub
+from .client import BarkaPay
 from .enums import PaymentLinkStatus, PaymentStatus, ReasonCode, TransferStatus
 from .errors import (
     ApiError,
     AuthenticationError,
     AuthorizationError,
+    BarkaPayError,
     ConfigurationError,
     ConflictError,
     InsufficientBalanceError,
     NetworkError,
     NotFoundError,
-    PayHubError,
     PaymentFailedError,
     RateLimitError,
     ServerError,
@@ -61,14 +61,14 @@ __all__ = [
     "AuthenticationError",
     "AuthorizationError",
     "Balance",
+    "BarkaPay",
+    "BarkaPayError",
     "ConfigurationError",
     "ConflictError",
     "InsufficientBalanceError",
     "NetworkError",
     "NotFoundError",
     "Pagination",
-    "PayHub",
-    "PayHubError",
     "Payment",
     "PaymentFailedError",
     "PaymentLink",

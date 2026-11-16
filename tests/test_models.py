@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from payhub import Balance, Payment, PaymentStatus, TransferStatus
+from barkapay import Balance, Payment, PaymentStatus, TransferStatus
 
 
 def test_payment_hydrates_and_keeps_raw() -> None:

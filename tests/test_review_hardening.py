@@ -12,25 +12,25 @@ from typing import Any
 
 import pytest
 
-from payhub import (
+from barkapay import (
     ApiError,
+    BarkaPay,
     ConfigurationError,
     NetworkError,
     Pagination,
-    PayHub,
     Payment,
     RateLimitError,
     UrllibTransport,
     webhook,
 )
-from payhub.http import Response
+from barkapay.http import Response
 from tests import samples
 from tests.support import FakeTransport, json_response, make_client, ok
 
 KEY = "pk_live_abc123:sk_live_SUPERSECRET"
 THROTTLE_BODY = {"status": "error", "code": "too_many_requests", "message": "Too many requests."}
 
-Write = Callable[[PayHub], Any]
+Write = Callable[[BarkaPay], Any]
 WRITES: dict[str, Write] = {
     "payments.create": lambda c: c.payments.create({"operator": "ORANGE"}),
     "payments.confirm_otp": lambda c: c.payments.confirm_otp(samples.PAYMENT_ID, "123456"),
@@ -135,7 +135,7 @@ def test_sleep_is_looked_up_at_call_time(monkeypatch: pytest.MonkeyPatch) -> Non
     # A test-suite that patches time.sleep after building the client (as it
     # could with 1.0.0) must not really sleep.
     transport = FakeTransport([json_response(429, THROTTLE_BODY), ok({})])
-    client = PayHub(api_key=KEY, country="bf", transport=transport, max_retries=1)
+    client = BarkaPay(api_key=KEY, country="bf", transport=transport, max_retries=1)
     slept: list[float] = []
     monkeypatch.setattr(time, "sleep", slept.append)
     client.ping()
@@ -178,7 +178,7 @@ def test_a_garbled_retry_after_on_an_error_is_ignored() -> None:
 
 
 def test_the_key_is_not_in_any_frame_when_params_cannot_be_encoded() -> None:
-    client = PayHub(api_key=KEY, country="bf", transport=FakeTransport([]))
+    client = BarkaPay(api_key=KEY, country="bf", transport=FakeTransport([]))
     try:
         client.payments.create({"amount": object()})
     except ConfigurationError:
@@ -213,17 +213,17 @@ def test_the_key_is_not_in_any_frame_when_params_cannot_be_encoded() -> None:
 def test_base_url_edge_cases_are_refused(base_url: str, custom_transport: bool) -> None:
     transport = FakeTransport([]) if custom_transport else None
     with pytest.raises(ConfigurationError):
-        PayHub(api_key=KEY, country="bf", base_url=base_url, transport=transport)
+        BarkaPay(api_key=KEY, country="bf", base_url=base_url, transport=transport)
 
 
 def test_plain_http_is_for_custom_transports_only() -> None:
     # A custom transport owns its connection (docker / in-process mocks)…
     transport = FakeTransport([ok({})])
-    PayHub(api_key=KEY, country="bf", base_url="http://mock-api:8080", transport=transport).ping()
+    BarkaPay(api_key=KEY, country="bf", base_url="http://mock-api:8080", transport=transport).ping()
     assert transport.requests[0].url == "http://mock-api:8080/bf/v1/ping"
     # …the built-in one never sends the key in clear text over the network.
     with pytest.raises(ConfigurationError):
-        PayHub(api_key=KEY, country="bf", base_url="http://mock-api:8080")
+        BarkaPay(api_key=KEY, country="bf", base_url="http://mock-api:8080")
 
 
 @pytest.mark.parametrize(
@@ -239,7 +239,7 @@ def test_plain_http_is_for_custom_transports_only() -> None:
 def test_plain_http_never_reaches_a_barkapay_host(base_url: str, custom_transport: bool) -> None:
     transport = FakeTransport([]) if custom_transport else None
     with pytest.raises(ConfigurationError):
-        PayHub(api_key=KEY, country="bf", base_url=base_url, transport=transport)
+        BarkaPay(api_key=KEY, country="bf", base_url=base_url, transport=transport)
 
 
 @pytest.mark.parametrize(
@@ -272,7 +272,7 @@ def test_a_network_error_carries_the_request_id_that_was_sent() -> None:
 )
 def test_only_http_schemes_even_with_a_custom_transport(base_url: str) -> None:
     with pytest.raises(ConfigurationError):
-        PayHub(api_key=KEY, country="bf", base_url=base_url, transport=FakeTransport([]))
+        BarkaPay(api_key=KEY, country="bf", base_url=base_url, transport=FakeTransport([]))
 
 
 @pytest.mark.parametrize("timeout", [float("nan"), float("inf"), float("-inf")])
@@ -280,7 +280,7 @@ def test_non_finite_timeouts_are_refused(timeout: float) -> None:
     with pytest.raises(ConfigurationError):
         UrllibTransport(timeout=timeout)
     with pytest.raises(ConfigurationError):
-        PayHub(api_key=KEY, country="bf", timeout=timeout)
+        BarkaPay(api_key=KEY, country="bf", timeout=timeout)
 
 
 # --- a 2xx that cannot be used ------------------------------------------------------------
