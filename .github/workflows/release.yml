@@ -44,6 +44,7 @@ jobs:
           enable-cache: false
       - run: uv sync --locked --extra dev
       - run: uv run ruff check .
+      - run: uv run ruff format --check .
       - run: uv run mypy
       - run: uv run pytest
 
@@ -56,6 +57,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+
+      # A tag pushed on a side branch (or on an unreviewed commit) never publishes.
+      - name: Tag must point at a commit of main
+        if: github.event_name == 'push'
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME ($GITHUB_SHA) is not on main — refusing to publish."
+            exit 1
+          fi
 
       - name: Install uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
@@ -81,6 +93,10 @@ jobs:
           tag="${GITHUB_REF_NAME#v}"
           if [ "$tag" != "$PKG_VERSION" ]; then
             echo "::error::Tag v$tag does not match _version.py $PKG_VERSION"
+            exit 1
+          fi
+          if ! grep -q "^## \[$tag\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no entry for $tag"
             exit 1
           fi
 

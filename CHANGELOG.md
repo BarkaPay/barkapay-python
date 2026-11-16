@@ -28,7 +28,7 @@ signature. Several behaviours are deliberately stricter or safer — read
   (`http://` is accepted for `localhost` only). `file:`, `ftp:`, `data:`,
   URLs with embedded credentials, a query string or non-ASCII characters are
   always refused. (A custom `transport=` owns its connection and may still be
-  pointed at a plain-http mock.)
+  pointed at a plain-http mock — never at a barkapay host.)
 - **TLS verification cannot be weakened by accident.** The transport builds its
   own verifying context (TLS 1.2 minimum), unaffected by a process-wide
   `ssl._create_default_https_context` override; `UrllibTransport(context=…)`
@@ -39,17 +39,18 @@ signature. Several behaviours are deliberately stricter or safer — read
   is refused at construction without being echoed.
 - **Identifiers and country codes are validated before reaching the URL.** An
   empty id no longer turns `payments.get("")` into the list endpoint (which
-  returned an unrelated payment); `.`/`..`, control characters and invalid
-  country codes are refused.
+  returned an unrelated payment); `.`/`..`, `/`, `?`, `#`, control characters
+  and country codes that are not two letters are refused before any request.
 - **Webhook verification is strict.** Malformed headers (duplicated `t`,
   non-hex or truncated `v1`, non-ASCII digits or characters) now return
   `False` instead of raising `TypeError` / `ValueError`; an empty signing
-  secret and a negative `tolerance` raise `ConfigurationError` instead of
+  secret and a `tolerance` of 0 or less raise `ConfigurationError` instead of
   silently accepting forged or replayed deliveries.
 - A 2xx response whose body is not the JSON envelope, or lacks the expected
-  object or list, raises `ApiError` (`code="invalid_response"`) instead of
-  returning an empty `Payment` / `Transfer` or an empty page. It means
-  "accepted but unreadable", not "refused".
+  object or list (`ping()`, `me()` and `operators.*` included), raises
+  `ApiError` (`code="invalid_response"`) instead of returning an empty
+  `Payment` / `Transfer`, an empty page or `{}`. It means "accepted but
+  unreadable", not "refused".
 - The API key is no longer present in the local variables of a traceback
   raised while building a request.
 - Truncated and oversized (> 10 MiB) responses raise `NetworkError`.
@@ -78,8 +79,10 @@ signature. Several behaviours are deliberately stricter or safer — read
   `total_decimal`, `holds_decimal` accessors; `Decimal` amounts, `date` and
   timezone-aware `datetime` values are accepted in request params.
 - **Pagination helpers**: `Pagination.page_count`, `next_page`, `has_more`.
-- `Retry-After` is honoured (never retried earlier; a wait longer than 60 s is
+- `Retry-After` is honoured (never retried earlier; a wait longer than 10 s is
   raised to the caller) and backoff is jittered.
+- `NetworkError.request_id`: the `X-Request-Id` that was sent, to quote to
+  support.
 - `UrllibTransport(context=…)` for a custom (verifying) CA bundle.
 - `ConfigurationError` is now also a `ValueError`.
 - Python 3.13 and 3.14 are tested and declared.
@@ -88,7 +91,8 @@ signature. Several behaviours are deliberately stricter or safer — read
 
 - Default timeout raised from 30 to 40 seconds, so the SDK receives the API's
   own answer (given within 30 seconds) instead of timing out on an unknown
-  outcome.
+  outcome. With the built-in transport it bounds the connection and each read
+  (the standard library has no whole-request deadline).
 - `User-Agent` is now `payhub-python/<version> python/<version>`.
 - `str()` and f-strings of the status enums give the wire value
   (`"SUCCESSFUL"`) on every Python version (3.11 changed the default).
@@ -101,20 +105,22 @@ signature. Several behaviours are deliberately stricter or safer — read
   Security). If you relied on that, handle `ServiceUnavailableError` and
   `NetworkError` yourself — after checking that the operation was not
   recorded.
-- A 429 whose `Retry-After` is short is waited for (reads: up to 60 s, writes:
-  up to 10 s) instead of being retried within a second; a longer one raises
-  `RateLimitError` immediately.
+- A 429 whose `Retry-After` is 10 s or less is waited for instead of being
+  retried within a second; a longer one raises `RateLimitError` immediately
+  (reads and writes alike — same rule in the PHP and Node SDKs).
 - `ConfigurationError` is now raised at construction or before sending for:
   a `base_url` that is not https (built-in transport), an `api_key` without
-  the `key_id:` part, an invalid country code, an empty or malformed id,
+  the `key_id:` part, an invalid country code, an empty or malformed id (an id
+  containing `/` used to be sent percent-encoded and answered 404),
   `timeout` that is not a positive finite number, `max_retries` that is not
   an `int` (values above 10 are capped), params that cannot be encoded as
   JSON (was `TypeError`).
 - Redirects are returned as `ApiError` (HTTP 3xx) instead of being followed.
 - The built-in transport ignores an opener installed with
   `urllib.request.install_opener()`; environment proxies still apply.
-- `webhook.verify` / `parse`: an empty secret, a negative or non-finite
-  `tolerance` and a parsed (non-raw) payload raise `ConfigurationError`.
+- `webhook.verify` / `parse`: an empty secret, a `tolerance` of 0 or less
+  (0 used to switch the replay check off) or non-finite, and a parsed
+  (non-raw) payload raise `ConfigurationError`.
 - `str(PaymentStatus.SUCCESSFUL)` is `"SUCCESSFUL"` (was
   `"PaymentStatus.SUCCESSFUL"`).
 - `EXPIRED` payments now have `status=PaymentStatus.EXPIRED` (was `None`).
