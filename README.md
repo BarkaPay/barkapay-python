@@ -23,6 +23,10 @@ Python **3.9+**.
 pip install barkapay-payhub
 ```
 
+> The package to install is **`barkapay-payhub`**. The PyPI project named
+> `payhub` is an unrelated product from another company — do not install it,
+> and never give it your API key.
+
 ## Quick start
 
 ```python
@@ -102,6 +106,11 @@ else:
     if payment.status is PaymentStatus.AWAITING_OTP:
         payment = client.payments.confirm_otp(payment.public_id, otp)
 ```
+
+`PaymentFailedError` is the definitive refusal (HTTP 424). When the operator
+is unreachable or something breaks, `create` raises `ServiceUnavailableError`
+(503) or `ServerError` (5xx) instead — and if the attempt was recorded, that
+error carries the `FAILED` payment too (`error.payment`, else `None`).
 
 `get` accepts the payment's `public_id` or your own `order.id`. Several
 payments can share an `order.id` (unless you send `order.unique`): `get` then

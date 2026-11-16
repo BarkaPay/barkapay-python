@@ -17,7 +17,8 @@ every 1.0.0 call keeps its signature.
   automatically after a 5xx or a network error.** 1.0.0 re-sent `POST`
   requests (payments, transfers, OTP confirmation) on 503 and on timeouts,
   which could execute the same payout or charge twice. Retries now apply only
-  to requests answered 429 (not executed) and to read-only requests.
+  to requests answered 429 (not executed) and to read-only requests (502,
+  503, 504 or a network error).
 - **Redirects are never followed.** urllib used to follow them and forward the
   `Authorization` header to the redirect target, including another host.
 - **HTTPS only.** `base_url` must be `https://` (`http://` is accepted for
