@@ -5,11 +5,14 @@ Thanks for helping improve the barkapay Python SDK.
 ## Development setup
 
 We use [uv](https://docs.astral.sh/uv/). Install the dev tools into a managed
-environment:
+environment — `uv.lock` pins the exact versions CI uses:
 
 ```bash
-uv sync --extra dev
+uv sync --locked --extra dev
 ```
+
+To move to newer tool versions: `uv lock --upgrade`, run the checks, commit
+the lock file.
 
 ## Checks (must pass before opening a PR)
 

@@ -1,4 +1,6 @@
-# Keeps the SHA-pinned GitHub Actions up to date (one grouped PR per week).
+# Keeps the SHA-pinned GitHub Actions and the locked development tools
+# (uv.lock: ruff, mypy, pytest) up to date — one grouped PR per week each.
+# The package itself has no runtime dependency.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -10,3 +12,13 @@ updates:
         patterns: ['*']
     commit-message:
       prefix: ci
+
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      dev-tools:
+        patterns: ['*']
+    commit-message:
+      prefix: chore

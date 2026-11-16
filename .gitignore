@@ -10,7 +10,6 @@ dist/
 # Virtualenvs / tooling
 .venv/
 venv/
-uv.lock
 
 # Caches
 .pytest_cache/
