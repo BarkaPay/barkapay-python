@@ -61,9 +61,12 @@ def as_money_str(data: Mapping[str, Any], key: str) -> str | None:
         return None
     if isinstance(value, str):
         return value
-    if isinstance(value, (int, float)):
-        # repr() is the shortest string that round-trips the float.
-        return repr(value)
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        # Shortest round-trip digits, in plain notation (never "1e-07").
+        number = to_decimal(value)
+        return format(number, "f") if number is not None else None
     return None
 
 
@@ -189,7 +192,7 @@ def normalize_country(country: object) -> str:
     code = country.strip().lower()
     if not _COUNTRY_RE.fullmatch(code):
         raise ConfigurationError(
-            "Invalid country code: expected a 2-letter code such as 'bf', 'bj' or 'sn'."
+            "Invalid country code: expected a short lowercase code such as 'bf', 'bj' or 'sn'."
         )
     return code
 

@@ -21,6 +21,10 @@ class ApiError(PayHubError):
     """Base class for every error returned by the API (any response with the
     standard error envelope or a non-2xx status).
 
+    One code is produced by the SDK itself: ``invalid_response`` — the API
+    answered 2xx (the request was accepted) but the body could not be used.
+    After a create call it means "outcome unknown", never "refused".
+
     Attributes:
         code: machine-readable code from the envelope (e.g. ``validation_error``).
         http_status: HTTP status of the response.
@@ -178,7 +182,8 @@ class TransferFailedError(ApiError):
 
 class RateLimitError(ApiError):
     """429 — rate limit reached. The request was NOT executed; wait
-    :attr:`retry_after` seconds before retrying."""
+    :attr:`retry_after` seconds before retrying (``None`` when the API gave
+    no ``Retry-After`` — back off on your own)."""
 
 
 class ServiceUnavailableError(ApiError):

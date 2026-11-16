@@ -341,6 +341,11 @@ Two more exceptions never come from the API: `ConfigurationError` (invalid
 arguments — malformed key, non-HTTPS URL, empty id… — raised before any
 request is sent) and `SignatureVerificationError` (webhooks).
 
+One `ApiError` is not a refusal: `code == "invalid_response"` means the API
+answered 2xx — the request was **accepted** — but the body could not be read
+(a proxy page, a cut-off answer). After a create call, treat it like a
+`NetworkError`: check before sending again.
+
 Catch everything from the SDK with `payhub.PayHubError`.
 
 ```python
@@ -363,22 +368,36 @@ except NetworkError:
 The SDK retries **only what is safe to repeat** (`max_retries`, default 2,
 exponential backoff with jitter, `Retry-After` honoured):
 
-- any request answered **429** — the rate limiter refused it before anything ran;
-- **read-only** requests (`GET`) that hit 502 / 503 / 504 or a network error.
+- **read-only** requests (`GET`) answered 429, 502, 503 or 504, or that hit a
+  network error;
+- any other request **only** when the API's rate limiter refused it (429
+  `too_many_requests`, nothing was executed) and asks to wait 10 seconds at
+  most — otherwise `RateLimitError` is raised at once with `.retry_after`.
 
-A request that creates or changes something (`payments.create`,
+A request that creates or moves money (`payments.create`,
 `transfers.create`, `confirm_otp`, payment-link writes) is **never replayed**
-after a 5xx or a network error: the first attempt may have gone through, and
-the API has no idempotency-key header. When such a call ends with a
-`NetworkError` or a 5xx, the outcome is unknown:
+after a timeout, a network error or a 5xx: the first attempt may have gone
+through, and the API has no idempotency-key header. Make your own retries
+safe in two steps:
 
-1. look the operation up with your own reference —
-   `client.transfers.get(order_id)` / `client.payments.get(order_id)`;
-2. only create again if it does not exist.
+1. Always send `"order": {"id": …, "unique": True}`. The API then refuses a
+   second create with the same `order.id` (409 `ConflictError`), whatever the
+   outcome of the first — a duplicate can no longer be created by mistake.
+2. When a create ends with a `NetworkError`, a 5xx or an `invalid_response`
+   error, the outcome is unknown: check before doing anything else, with a
+   list filtered on your reference.
 
-Send `"order": {"id": …, "unique": True}` to make this airtight: the API then
-refuses a second create with the same `order.id` (409 `ConflictError`),
-whatever the outcome of the first — use a new id for a deliberate new attempt.
+```python
+order_id = "PAYOUT-2026-001"
+try:
+    transfer = client.transfers.create({**params, "order": {"id": order_id, "unique": True}})
+except (payhub.NetworkError, payhub.ServerError, payhub.ServiceUnavailableError):
+    existing = client.transfers.list({"order_id": order_id})
+    transfer = existing[0] if len(existing) else None  # None: it was never recorded
+```
+
+Only when nothing was recorded is it safe to send the request again. For a
+deliberate new attempt after a recorded failure, use a new `order.id`.
 
 The default timeout is 40 seconds per connection / read (the API answers
 within 30 seconds).
@@ -387,9 +406,10 @@ within 30 seconds).
 
 Requests are throttled per merchant and per route family (payments and
 payment links, transfer creation, transfer reads). Over the limit, the API
-answers **429** with a `Retry-After` header: the SDK waits that long (when it
-is at most 60 seconds) and retries, up to `max_retries` times, then raises
-`RateLimitError` with `.retry_after`. The limits are not published — read
+answers **429** with a `Retry-After` header: the SDK waits that long and
+retries, up to `max_retries` times — when the wait is at most 60 seconds for
+a read, 10 seconds for a write. Beyond that it raises `RateLimitError` with
+`.retry_after` and lets you decide. The limits are not published — read
 them at run time: authenticated responses carry `x-ratelimit-limit` and
 `x-ratelimit-remaining`. On errors they are in `error.headers`; a transport
 wrapper sees them on every response:
@@ -415,14 +435,16 @@ paced_client = payhub.PayHub(api_key="key_id:secret", country="bf", transport=wa
 client = payhub.PayHub(
     api_key="key_id:secret",
     country="bf",
-    base_url="https://hub.barkapay.com",  # https only
+    base_url="https://hub.barkapay.com",  # https only (http for localhost)
     max_retries=2,  # 0 disables automatic retries
     timeout=40.0,  # seconds
 )
 ```
 
 `transport=` accepts any callable `(payhub.Request) -> payhub.Response`: use
-it to plug another HTTP stack, or to fake the network in your tests.
+it to plug another HTTP stack, or to fake the network in your tests. A custom
+transport owns its connection: it must verify TLS, must not follow redirects,
+and `timeout` does not apply to it.
 
 ```python
 import json
@@ -447,7 +469,8 @@ A client holds no per-request state: create one and share it between threads.
 - TLS certificates and host names are always verified; there is no option to
   turn that off. A custom CA bundle goes through
   `payhub.UrllibTransport(context=...)`, which refuses a non-verifying context.
-- Only `https://` base URLs are accepted (`http://` for `localhost` only).
+- With the built-in transport only `https://` base URLs are accepted
+  (`http://` for `localhost` only).
 - Redirects are never followed, so the API key cannot be forwarded to another
   host.
 - The API key never appears in `repr()`, exceptions or logs produced by the SDK.

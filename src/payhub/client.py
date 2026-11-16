@@ -9,8 +9,9 @@ import random
 import re
 import time
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import urlencode
 
 from ._util import (
     as_dict,
@@ -22,7 +23,7 @@ from ._util import (
 )
 from ._version import __version__
 from .errors import ApiError, ConfigurationError, NetworkError
-from .http import Request, Response, Transport, UrllibTransport, assert_safe_url
+from .http import Request, Transport, UrllibTransport, assert_safe_url
 from .resources import BalanceResource, Operators, PaymentLinks, Payments, Transfers
 
 __all__ = ["PayHub"]
@@ -38,6 +39,9 @@ _MAX_DELAY_S = 8.0
 #: A ``Retry-After`` longer than this is not slept through: the error is
 #: raised with ``retry_after`` set and the caller decides.
 _MAX_RETRY_AFTER_S = 60.0
+#: Same, for a request that creates or changes something: money is not sent
+#: from a call that has been asleep for a minute.
+_MAX_WRITE_RETRY_AFTER_S = 10.0
 
 #: Methods that are safe to send twice.
 _SAFE_METHODS = frozenset({"GET", "HEAD"})
@@ -88,14 +92,16 @@ class PayHub:
         :param secret: …and the secret, passed separately.
         :param country: default country code (``"bf"``, ``"bj"``, ``"sn"``);
             overridable per call.
-        :param base_url: API base URL. Must be ``https://`` (``http://`` is
-            accepted for localhost only).
+        :param base_url: API base URL. With the built-in transport it must be
+            ``https://`` (``http://`` is accepted for localhost only).
         :param max_retries: automatic retries of requests that are safe to
-            repeat: any request answered 429 (it was not executed) and
-            read-only (GET) requests that hit 502/503/504 or a network error.
-            A request that creates or changes something is never replayed
-            after a 5xx or a network error. ``0`` disables retries.
-        :param timeout: seconds allowed for the connection and for each read.
+            repeat (at most 10): a request answered 429 by the rate limiter
+            (it was not executed) and read-only (GET) requests that hit
+            502/503/504 or a network error. A request that creates or changes
+            something is never replayed after a timeout, a network error or
+            a 5xx. ``0`` disables retries.
+        :param timeout: seconds allowed for the connection and for each read
+            (built-in transport only; a custom ``transport`` manages its own).
         :param transport: a custom :class:`~payhub.http.Transport` (e.g. a fake in tests).
         """
         if isinstance(max_retries, bool) or not isinstance(max_retries, int):
@@ -104,7 +110,7 @@ class PayHub:
         self._api = _ApiClient(
             transport=transport if transport is not None else UrllibTransport(timeout),
             authorization=_build_authorization(api_key, key_id, secret),
-            base_url=_normalize_base_url(base_url),
+            base_url=_normalize_base_url(base_url, https_only=transport is None),
             default_country=_normalize_default_country(country),
             max_retries=min(max(0, max_retries), _MAX_RETRIES_CAP),
             user_agent=f"payhub-python/{__version__} python/{platform.python_version()}",
@@ -122,13 +128,11 @@ class PayHub:
 
     def ping(self, country: str | None = None) -> dict[str, Any]:
         """Liveness check (also confirms your key works)."""
-        env = self._api.request("GET", "ping", country=country)
-        return as_dict(env, "data") or {}
+        return self._api.request("GET", "ping", country=country).data or {}
 
     def me(self, country: str | None = None) -> dict[str, Any]:
         """Current merchant + API application details (scopes, permissions)."""
-        env = self._api.request("GET", "me", country=country)
-        return as_dict(env, "data") or {}
+        return self._api.request("GET", "me", country=country).data or {}
 
 
 class _Credential:
@@ -185,14 +189,26 @@ def _build_authorization(
     return _Credential(f"Bearer {token}")
 
 
-def _normalize_base_url(base_url: object) -> str:
+def _normalize_base_url(base_url: object, *, https_only: bool) -> str:
+    """Validate ``base_url``.
+
+    Always refused: anything that is not an absolute http(s) URL, embedded
+    credentials, a query string or fragment, non-ASCII or control characters.
+    With the built-in transport (``https_only``) clear-text ``http://`` is
+    refused too, except for localhost. A custom transport owns its
+    connection and may be pointed at a plain-http mock.
+    """
     if not isinstance(base_url, str) or base_url.strip() == "":
         raise ConfigurationError("`base_url` must be a non-empty string.")
     url = base_url.strip().rstrip("/")
-    assert_safe_url(url)
-    parts = urlsplit(url)
-    if parts.query or parts.fragment:
+    if not url.isascii():
+        raise ConfigurationError("`base_url` must contain ASCII characters only.")
+    if "?" in url or "#" in url:
         raise ConfigurationError("`base_url` must not contain a query string or a fragment.")
+    if https_only:
+        assert_safe_url(url)
+    else:
+        assert_safe_url(url, allow_plain_http=True)
     return url
 
 
@@ -203,7 +219,8 @@ def _normalize_default_country(country: object) -> str:
 
 
 def _parse_retry_after(value: str | None, now: float) -> float | None:
-    """``Retry-After`` as seconds from now (delta-seconds or HTTP-date)."""
+    """``Retry-After`` as seconds from now (delta-seconds or HTTP-date).
+    Anything unreadable is ``None`` — a header never makes a call fail."""
     if value is None:
         return None
     text = value.strip()
@@ -213,12 +230,64 @@ def _parse_retry_after(value: str | None, now: float) -> float | None:
         return float(text)
     try:
         when = email.utils.parsedate_to_datetime(text)
-    except (TypeError, ValueError, IndexError):
+        if when.tzinfo is None:
+            # "-0000": the date is UTC without a stated zone.
+            when = when.replace(tzinfo=datetime.timezone.utc)
+        return max(0.0, when.timestamp() - now)
+    except (TypeError, ValueError, IndexError, OverflowError):
         return None
-    if when.tzinfo is None:
-        # "-0000": the date is UTC without a stated zone.
-        when = when.replace(tzinfo=datetime.timezone.utc)
-    return max(0.0, when.timestamp() - now)
+
+
+@dataclass(frozen=True)
+class _ApiResult:
+    """A successful (2xx) answer: the envelope, plus what is needed to report
+    one that does not carry what the endpoint must return."""
+
+    envelope: dict[str, Any]
+    http_status: int
+    headers: Mapping[str, str]
+    request_id: str | None
+
+    @property
+    def data(self) -> dict[str, Any] | None:
+        return as_dict(self.envelope, "data")
+
+    def unexpected(self, what: str) -> ApiError:
+        """The API answered 2xx — the request was accepted — but the body is
+        not usable. For a create call this is NOT a refusal."""
+        return ApiError(
+            f"Unexpected response from the API (HTTP {self.http_status}): {what}. "
+            "The request was accepted: after a create call, check with your "
+            "order id before sending it again.",
+            "invalid_response",
+            self.http_status,
+            self.request_id,
+            data=self.data,
+            headers=self.headers,
+        )
+
+    def resource(self, key: str) -> dict[str, Any]:
+        """The object a successful call must return — never an empty stand-in."""
+        resource = as_dict(self.data or {}, key)
+        if resource is None:
+            raise self.unexpected(f"`data.{key}` is missing")
+        public_id = resource.get("public_id")
+        if not isinstance(public_id, str) or public_id == "":
+            raise self.unexpected(f"`data.{key}.public_id` is missing")
+        return resource
+
+    def rows(self, key: str) -> list[dict[str, Any]]:
+        """The list a successful call must return — a malformed answer is
+        never passed off as "no result"."""
+        value = (self.data or {}).get(key)
+        if not isinstance(value, list):
+            raise self.unexpected(f"`data.{key}` is missing")
+        rows: list[dict[str, Any]] = []
+        for row in value:
+            if not isinstance(row, dict):
+                raise self.unexpected(f"`data.{key}` contains something that is not an object")
+            rows.append(row)
+        return rows
 
 
 class _ApiClient:
@@ -246,8 +315,9 @@ class _ApiClient:
         self._max_retries = max_retries
         self._user_agent = user_agent
         # Seams for the test-suite (no real sleeping, deterministic jitter).
-        self._sleep: Callable[[float], None] = time.sleep
-        self._uniform: Callable[[float, float], float] = random.uniform
+        # ``None`` = the standard library, looked up at call time.
+        self._sleep: Callable[[float], None] | None = None
+        self._uniform: Callable[[float, float], float] | None = None
 
     def __repr__(self) -> str:
         return f"<payhub API client country={self._default_country!r} base_url={self._base_url!r}>"
@@ -268,7 +338,13 @@ class _ApiClient:
         country: str | None = None,
         body: Mapping[str, Any] | None = None,
         query: Mapping[str, Any] | None = None,
-    ) -> dict[str, Any]:
+        allow_empty: bool = False,
+    ) -> _ApiResult:
+        """Send one logical call.
+
+        :param allow_empty: accept a 2xx with an empty body (endpoints that
+            return nothing).
+        """
         method = method.upper()
         request_id = generate_request_id()
         req = self._build_request(method, path, country, body, query, request_id)
@@ -280,22 +356,35 @@ class _ApiClient:
             except NetworkError:
                 # The request may have reached the API: only a read is replayed.
                 if method in _SAFE_METHODS and attempt < self._max_retries:
-                    self._sleep(self._backoff(attempt))
+                    self._pause(self._backoff(attempt))
                     attempt += 1
                     continue
                 raise
 
+            status = response.status_code
             headers = {str(k).lower(): str(v) for k, v in response.headers.items()}
+            envelope = json_decode(response.body)
+
+            if (
+                200 <= status < 300
+                and envelope is not None
+                and envelope.get("status") not in ("error", "failed")
+            ):
+                return _ApiResult(envelope, status, headers, _request_id(envelope, headers))
+
+            if 200 <= status < 300 and allow_empty and response.body.strip() == "":
+                return _ApiResult({}, status, headers, headers.get("x-request-id") or request_id)
+
             retry_after = _parse_retry_after(headers.get("retry-after"), time.time())
 
-            if attempt < self._max_retries and self._can_retry(method, response.status_code):
-                delay = self._retry_delay(attempt, retry_after)
+            if attempt < self._max_retries and self._can_retry(method, status, envelope):
+                delay = self._retry_delay(attempt, retry_after, method)
                 if delay is not None:
-                    self._sleep(delay)
+                    self._pause(delay)
                     attempt += 1
                     continue
 
-            return self._handle(response, headers, retry_after, request_id)
+            raise self._error(status, envelope, headers, retry_after, request_id)
 
     def _build_request(
         self,
@@ -321,63 +410,65 @@ class _ApiClient:
             if pairs:
                 url += "?" + urlencode(pairs)
 
-        headers: dict[str, str] = {
-            "Authorization": self._authorization.header(),
-            "Accept": "application/json",
-            "User-Agent": self._user_agent,
-            "X-Request-Id": request_id,
-        }
+        # Everything that can fail on caller input happens BEFORE the
+        # credential enters this frame, so a traceback (or an error reporter
+        # capturing local variables) never holds the key.
+        payload = json_encode(body) if body is not None else None
 
-        payload: str | None = None
-        if body is not None:
-            headers["Content-Type"] = "application/json"
-            payload = json_encode(body)
-
-        return Request(method, url, headers, payload)
+        return Request(
+            method,
+            url,
+            {
+                "Authorization": self._authorization.header(),
+                "Accept": "application/json",
+                "User-Agent": self._user_agent,
+                "X-Request-Id": request_id,
+                **({"Content-Type": "application/json"} if payload is not None else {}),
+            },
+            payload,
+        )
 
     @staticmethod
-    def _can_retry(method: str, status: int) -> bool:
-        # 429: refused by the rate limiter before anything ran — safe for
-        # every method. 502/503/504: the request may have been executed (a
-        # 503 on a create can even carry a recorded FAILED payment), so only
-        # reads are replayed. Money is never re-sent blindly.
-        if status == 429:
-            return True
-        return method in _SAFE_METHODS and status in _TRANSIENT_STATUSES
+    def _can_retry(method: str, status: int, envelope: Mapping[str, Any] | None) -> bool:
+        # Reads: 429 and "not now" answers are replayed.
+        if method in _SAFE_METHODS:
+            return status == 429 or status in _TRANSIENT_STATUSES
+        # Writes: money is never re-sent blindly. The ONLY replayed answer is
+        # the rate limiter's own refusal — issued before anything ran — and
+        # only when it carries no trace of a recorded operation. 5xx answers
+        # (a 503 on a create can carry a recorded FAILED payment) are final.
+        if status != 429 or envelope is None:
+            return False
+        return envelope.get("code") == "too_many_requests" and not envelope.get("data")
+
+    def _pause(self, seconds: float) -> None:
+        (self._sleep or time.sleep)(seconds)
 
     def _backoff(self, attempt: int) -> float:
         """Exponential backoff with jitter: 0.25-0.5 s, 0.5-1 s, 1-2 s… (max 8 s)."""
         ceiling = min(_MAX_DELAY_S, _BASE_DELAY_S * (2**attempt))
-        return self._uniform(ceiling / 2, ceiling)
+        return (self._uniform or random.uniform)(ceiling / 2, ceiling)
 
-    def _retry_delay(self, attempt: int, retry_after: float | None) -> float | None:
+    def _retry_delay(self, attempt: int, retry_after: float | None, method: str) -> float | None:
         """Seconds to wait before the next attempt; ``None`` = do not retry."""
         backoff = self._backoff(attempt)
         if retry_after is None:
             return backoff
-        if retry_after > _MAX_RETRY_AFTER_S:
+        limit = _MAX_RETRY_AFTER_S if method in _SAFE_METHODS else _MAX_WRITE_RETRY_AFTER_S
+        if retry_after > limit:
             return None
         # Never earlier than the API asked for (plus a little jitter so
         # parallel workers do not all come back on the same tick).
-        return max(backoff, retry_after + self._uniform(0.0, 0.25))
+        return max(backoff, retry_after + (self._uniform or random.uniform)(0.0, 0.25))
 
-    def _handle(
-        self,
-        response: Response,
+    @staticmethod
+    def _error(
+        status: int,
+        envelope: Mapping[str, Any] | None,
         headers: Mapping[str, str],
         retry_after: float | None,
         request_id: str,
-    ) -> dict[str, Any]:
-        envelope = json_decode(response.body)
-        status = response.status_code
-        is_success = (
-            200 <= status < 300
-            and envelope is not None
-            and envelope.get("status") not in ("error", "failed")
-        )
-        if is_success and envelope is not None:
-            return envelope
-
+    ) -> ApiError:
         details: dict[str, Any] = dict(envelope) if envelope is not None else {}
         if not isinstance(details.get("request_id"), str):
             details["request_id"] = headers.get("x-request-id") or request_id
@@ -385,10 +476,19 @@ class _ApiClient:
         if 200 <= status < 300 and envelope is None:
             # A 2xx whose body is not the JSON envelope is not an answer from
             # the API (proxy page, truncated body…): never build an empty
-            # Payment out of it.
+            # Payment out of it — and never call it a refusal either.
             details["code"] = "invalid_response"
             details["message"] = (
-                f"Unexpected response from the API (HTTP {status}, body is not a JSON object)."
+                f"Unexpected response from the API (HTTP {status}): the body is not a "
+                "JSON object. The request was accepted: after a create call, check "
+                "with your order id before sending it again."
             )
 
-        raise ApiError.from_envelope(status, details, headers=headers, retry_after=retry_after)
+        return ApiError.from_envelope(status, details, headers=headers, retry_after=retry_after)
+
+
+def _request_id(envelope: Mapping[str, Any], headers: Mapping[str, str]) -> str | None:
+    value = envelope.get("request_id")
+    if isinstance(value, str) and value != "":
+        return value
+    return headers.get("x-request-id")

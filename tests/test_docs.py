@@ -272,3 +272,26 @@ def test_examples_never_ship_a_default_secret_or_key() -> None:
         assert "os.environ.get(" not in source, f"{path.name}: use os.environ[...] (fail fast)"
         assert "sk_live" not in source and "whsec_xxx" not in source
         assert "PayHub-Signature" not in source
+
+
+@pytest.mark.parametrize("recorded", [True, False])
+def test_readme_recipe_after_an_unknown_outcome_never_posts_twice(recorded: bool) -> None:
+    block = next(b for b in _python_blocks() if "existing = client.transfers.list(" in b)
+    seen: list[str] = []
+
+    def flaky(request: payhub.Request) -> payhub.Response:
+        seen.append(f"{request.method} {request.url.split('/v1/')[1]}")
+        if request.method == "POST":
+            raise payhub.NetworkError("The read operation timed out")
+        rows = [samples.transfer(order_id="PAYOUT-2026-001")] if recorded else []
+        return json_response(200, {"status": "success", "data": {"transfers": rows}})
+
+    namespace = _namespace(ApiDouble())
+    namespace["client"] = payhub.PayHub(api_key="key_id:secret", country="bf", transport=flaky)
+    exec(compile(block, "README.md[unknown outcome]", "exec"), namespace)
+
+    assert seen == ["POST transfers", "GET transfers?order_id=PAYOUT-2026-001"]
+    if recorded:
+        assert namespace["transfer"].order_id == "PAYOUT-2026-001"
+    else:
+        assert namespace["transfer"] is None

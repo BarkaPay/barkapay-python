@@ -6,9 +6,11 @@ in a different HTTP stack — or to fake the network in tests.
 
 Security properties of :class:`UrllibTransport`:
 
-- TLS certificates and host names are always verified, with a context the
-  transport builds itself (a process-wide ``ssl._create_default_https_context``
-  override does not weaken it); TLS 1.2 is the minimum.
+- TLS certificates and host names are always verified. By default the
+  transport builds its own context (TLS 1.2 minimum), which a process-wide
+  ``ssl._create_default_https_context`` override does not weaken; a custom
+  ``context`` must verify certificates and host names too, and is otherwise
+  used as given.
 - Only ``https://`` URLs are opened (plain ``http://`` is accepted for
   loopback hosts only, for local mock servers). ``file:``, ``ftp:`` and
   ``data:`` URLs are refused.
@@ -20,6 +22,7 @@ from __future__ import annotations
 
 import http.client
 import ipaddress
+import math
 import ssl
 import urllib.error
 import urllib.request
@@ -44,8 +47,9 @@ MAX_RESPONSE_BYTES = 10 * 1024 * 1024
 class Request:
     """An outbound HTTP request — a plain value object.
 
-    ``repr()`` masks credential headers, so logging a request never leaks the
-    API key.
+    ``repr()`` masks credential headers, so printing or logging the object
+    does not show the API key. The ``headers`` mapping itself holds the real
+    values (a transport needs them): never log it as is.
     """
 
     method: str
@@ -99,12 +103,16 @@ def is_loopback_host(host: str) -> bool:
         return False
 
 
-def assert_safe_url(url: str) -> None:
+def assert_safe_url(url: str, *, allow_plain_http: bool = False) -> None:
     """Refuse any URL the SDK must never send credentials to.
 
     Allowed: ``https://host[:port]/…``, and ``http://`` for loopback hosts
     only. Everything else — other schemes, embedded credentials, missing host
     — raises :class:`~payhub.errors.ConfigurationError`.
+
+    :param allow_plain_http: also accept ``http://`` for any host. Never used
+        by :class:`UrllibTransport`; the client uses it for the ``base_url``
+        handed to a custom transport, which owns its connection.
     """
     if not isinstance(url, str) or any(ord(ch) <= 0x20 or ord(ch) == 0x7F for ch in url):
         raise ConfigurationError("The URL must not contain spaces or control characters.")
@@ -112,8 +120,9 @@ def assert_safe_url(url: str) -> None:
         parts = urlsplit(url)
         host = parts.hostname or ""
         _ = parts.port  # raises ValueError on a malformed port
-    except ValueError as exc:
-        raise ConfigurationError(f"Malformed URL: {exc}") from exc
+    except ValueError:
+        # No detail: the text of a malformed URL is not echoed back.
+        raise ConfigurationError("Malformed URL (check the host and the port).") from None
 
     scheme = parts.scheme.lower()
     if host == "":
@@ -122,12 +131,14 @@ def assert_safe_url(url: str) -> None:
         raise ConfigurationError("The URL must not embed credentials (user:password@host).")
     if scheme == "https":
         return
-    if scheme == "http" and is_loopback_host(host):
+    if scheme == "http" and (allow_plain_http or is_loopback_host(host)):
         return
-    raise ConfigurationError(
-        "Only https:// URLs are allowed (http:// is accepted for localhost only): "
-        "the API key must never travel in clear text."
-    )
+    if scheme == "http":
+        raise ConfigurationError(
+            "Only https:// URLs are allowed (http:// is accepted for localhost only): "
+            "the API key must never travel in clear text."
+        )
+    raise ConfigurationError("Only https:// URLs are allowed.")
 
 
 def _default_ssl_context() -> ssl.SSLContext:
@@ -144,12 +155,22 @@ class UrllibTransport:
 
     :param timeout: seconds allowed for the connection and for each read.
     :param context: a custom :class:`ssl.SSLContext` (e.g. a private CA
-        bundle). It must keep certificate and host-name verification enabled.
+        bundle). It must keep certificate and host-name verification enabled;
+        its other settings (minimum TLS version…) are used as given.
+
+    The transport does not use an opener installed with
+    ``urllib.request.install_opener``. Proxies from the environment
+    (``HTTPS_PROXY`` / ``NO_PROXY``) are honoured.
     """
 
     def __init__(self, timeout: float = 40.0, *, context: ssl.SSLContext | None = None) -> None:
-        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or timeout <= 0:
-            raise ConfigurationError("`timeout` must be a positive number of seconds.")
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout)
+            or timeout <= 0
+        ):
+            raise ConfigurationError("`timeout` must be a positive, finite number of seconds.")
         if context is None:
             context = _default_ssl_context()
         elif context.verify_mode != ssl.CERT_REQUIRED or not context.check_hostname:
@@ -191,18 +212,10 @@ class UrllibTransport:
                 headers = _lower_headers(resp.headers.items())
                 body = _read_capped(resp, headers.get("content-length"))
                 return Response(int(resp.status), body, headers)
-        except urllib.error.HTTPError as exc:
-            # Not raised by the openers above (no error processor); kept so a
-            # status-carrying error from the standard library still surfaces
-            # as a Response the API client maps to a typed exception.
-            with exc:
-                try:
-                    body = _read_capped(exc)
-                except (OSError, http.client.HTTPException) as read_exc:
-                    raise NetworkError(_describe(read_exc)) from read_exc
-                headers = _lower_headers(exc.headers.items()) if exc.headers else {}
-                return Response(int(exc.code), body, headers)
         except urllib.error.URLError as exc:
+            # Connection-level failures (DNS, refused, TLS, proxy tunnel). The
+            # openers above have no error processor, so an HTTP status never
+            # arrives here: every status comes back as a response.
             raise NetworkError(_describe(exc.reason)) from exc
         except (OSError, http.client.HTTPException) as exc:
             # Timeouts, resets, truncated bodies, TLS failures.

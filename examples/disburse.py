@@ -46,12 +46,13 @@ def main(client: payhub.PayHub) -> payhub.Transfer | None:
         return None
     except NetworkError as exc:
         # No answer: the payout MAY have been executed. Never re-send blindly —
-        # look it up by your order id first.
+        # check with a list filtered on your order id first.
         print(f"No answer ({exc}); checking {order_id} before anything else", file=sys.stderr)
         try:
-            return client.transfers.get(order_id)
+            recorded = client.transfers.list({"order_id": order_id})
         except PayHubError:
-            return None
+            return None  # still unknown: check again later, do not re-send
+        return recorded[0] if len(recorded) else None
     except PayHubError as exc:
         print(f"barkapay error: {exc}", file=sys.stderr)
         return None
