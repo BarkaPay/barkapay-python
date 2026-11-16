@@ -32,8 +32,9 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
+      # --locked: the exact, hash-checked tool versions of uv.lock.
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --locked --extra dev
 
       - name: Lint (ruff)
         run: uv run ruff check .
@@ -66,17 +67,20 @@ jobs:
       - name: Build sdist + wheel
         run: uv build
 
-      - name: Check the distribution
-        run: |
-          uvx twine check --strict dist/*
-          python3 .github/scripts/check_dist.py dist
+      - name: Check the distribution (version, contents, metadata)
+        run: python3 .github/scripts/check_dist.py dist
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
-          path: dist/
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
           if-no-files-found: error
           retention-days: 7
+
+      - name: Check the long description renders on PyPI
+        run: uvx twine check --strict dist/*.whl dist/*.tar.gz
 
   install:
     name: Install the built wheel

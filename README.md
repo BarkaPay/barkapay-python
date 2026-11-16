@@ -30,16 +30,18 @@ import payhub
 
 client = payhub.PayHub(
     api_key="key_id:secret",  # exactly what you copy from the dashboard
-    country="bf",             # default country (bf, bj, sn) — overridable per call
+    country="bf",  # default country (bf, bj, sn) — overridable per call
 )
 
-payment = client.payments.create({
-    "operator": "ORANGE",
-    "phone_number": "74123456",
-    "amount": 10000,
-    "otp": "123456",          # only for operators that take the payer's code up-front
-    "order": {"id": "ORDER-2026-001"},
-})
+payment = client.payments.create(
+    {
+        "operator": "ORANGE",
+        "phone_number": "74123456",
+        "amount": 10000,
+        "otp": "123456",  # only for operators that take the payer's code up-front
+        "order": {"id": "ORDER-2026-001"},
+    }
+)
 
 print(payment.public_id, payment.status)
 ```
@@ -53,14 +55,14 @@ Every call targets one country: `https://hub.barkapay.com/{country}/v1/…`.
 Set the default on the client and override it per call when needed:
 
 ```python
-client.balance.get()              # default country
+client.balance.get()  # default country
 client.balance.get(country="sn")  # another country your key is enabled for
 ```
 
 ## Payments
 
 ```python
-client.payments.create(params)                # -> payhub.Payment
+client.payments.create(params)  # -> payhub.Payment
 client.payments.get("public_id or order id")  # -> payhub.Payment
 client.payments.list({"status": "SUCCESSFUL", "per_page": 50})  # -> payhub.PaymentList
 client.payments.confirm_otp(public_id, "123456")  # for AWAITING_OTP payments
@@ -87,10 +89,10 @@ from payhub import PaymentFailedError, PaymentStatus, ReasonCode
 try:
     payment = client.payments.create(params)
 except PaymentFailedError as error:
-    failed = error.payment                 # payhub.Payment, status FAILED
+    failed = error.payment  # payhub.Payment, status FAILED
     print(failed.public_id, error.reason_code, failed.provider_reason)
     if error.reason_code == ReasonCode.PAYER_INSUFFICIENT_FUNDS:
-        ...                                # tell the customer
+        ...  # tell the customer
 else:
     if payment.status is PaymentStatus.AWAITING_OTP:
         payment = client.payments.confirm_otp(payment.public_id, otp)
@@ -120,19 +122,21 @@ A payment link is a durable URL on the barkapay-hosted checkout: your customer
 picks an operator and pays there — no checkout to build.
 
 ```python
-link = client.payment_links.create({
-    "title": "Invoice INV-2026-001",
-    "amount": {"type": "fixed", "value": 15000, "currency": "XOF"},
-    "usage": "single",                       # or "multi"
-    "order": {"id": "INV-2026-001"},
-    "redirect": {"success_url": "https://shop.example/thanks"},
-})
-print(link.url)                              # send this to your customer
+link = client.payment_links.create(
+    {
+        "title": "Invoice INV-2026-001",
+        "amount": {"type": "fixed", "value": 15000, "currency": "XOF"},
+        "usage": "single",  # or "multi"
+        "order": {"id": "INV-2026-001"},
+        "redirect": {"success_url": "https://shop.example/thanks"},
+    }
+)
+print(link.url)  # send this to your customer
 
-client.payment_links.get(link.public_id)     # by PL-… id or by slug
+client.payment_links.get(link.public_id)  # by PL-… id or by slug
 client.payment_links.list({"status": ["active", "paid"]})
 client.payment_links.update(link.public_id, {"title": "Invoice INV-2026-001 (updated)"})
-client.payment_links.pause(link.public_id)   # the checkout refuses new payments
+client.payment_links.pause(link.public_id)  # the checkout refuses new payments
 client.payment_links.resume(link.public_id)
 client.payment_links.cancel(link.public_id)  # for good
 
@@ -159,14 +163,18 @@ and `payment_links:manage` scopes (see `client.me()["api_app"]["scopes"]`).
 ```python
 from decimal import Decimal
 
-transfer = client.transfers.create({
-    "operator": "ORANGE",
-    "phone_number": "74123456",
-    "amount": Decimal("5000"),
-    "order": {"id": "PAYOUT-2026-001", "unique": True},
-})
+transfer = client.transfers.create(
+    {
+        "operator": "ORANGE",
+        "phone_number": "74123456",
+        "amount": Decimal("5000"),
+        "order": {"id": "PAYOUT-2026-001", "unique": True},
+    }
+)
 client.transfers.get("public_id or order id")
-client.transfers.list({"from_date": "2026-11-01", "to_date": "2026-11-30"})  # -> payhub.TransferList
+client.transfers.list(
+    {"from_date": "2026-11-01", "to_date": "2026-11-30"}
+)  # -> payhub.TransferList
 ```
 
 - A definitive refusal raises `TransferFailedError` (the `FAILED` transfer is
@@ -182,13 +190,13 @@ client.transfers.list({"from_date": "2026-11-01", "to_date": "2026-11-30"})  # -
 ## Balance & operators
 
 ```python
-balance = client.balance.get()        # payhub.Balance
+balance = client.balance.get()  # payhub.Balance
 print(balance.available, balance.currency, balance.available_decimal)
 
-client.operators.info()               # operators of the country: OTP, amount bounds…
-client.operators.availability()       # real-time payment / transfer availability
-client.me()                           # your merchant + API application (scopes, permissions)
-client.ping()                         # liveness (also checks your key)
+client.operators.info()  # operators of the country: OTP, amount bounds…
+client.operators.availability()  # real-time payment / transfer availability
+client.me()  # your merchant + API application (scopes, permissions)
+client.ping()  # liveness (also checks your key)
 ```
 
 ## Amounts
@@ -224,15 +232,15 @@ from payhub import SignatureVerificationError, webhook
 
 try:
     event = webhook.parse(
-        raw_body,                # the RAW bytes of the request body
-        signature_header,        # the Barkapay-Signature header (webhook.SIGNATURE_HEADER)
-        endpoint_secret,         # whsec_…
+        raw_body,  # the RAW bytes of the request body
+        signature_header,  # the Barkapay-Signature header (webhook.SIGNATURE_HEADER)
+        endpoint_secret,  # whsec_…
     )
 except SignatureVerificationError:
-    ...                          # answer 400 and stop
+    ...  # answer 400 and stop
 
 if event["type"] == "payment" and event["status"] == "SUCCESSFUL":
-    ...                          # payment.succeeded: deliver the order
+    ...  # payment.succeeded: deliver the order
 ```
 
 `webhook.verify(...)` returns a `bool` if you prefer not to catch. Both reject
@@ -327,13 +335,13 @@ from payhub import ApiError, NetworkError, RateLimitError, ValidationError
 try:
     client.transfers.create(params)
 except ValidationError as error:
-    print(error.errors)                # {"phone_number": ["…"]}
+    print(error.errors)  # {"phone_number": ["…"]}
 except RateLimitError as error:
-    print(error.retry_after)           # seconds
+    print(error.retry_after)  # seconds
 except ApiError as error:
     print(error.http_status, error.code, error.request_id)
 except NetworkError:
-    ...                                # outcome unknown — see below
+    ...  # outcome unknown — see below
 ```
 
 ## Retries, timeouts and idempotency
@@ -368,8 +376,8 @@ client = payhub.PayHub(
     api_key="key_id:secret",
     country="bf",
     base_url="https://hub.barkapay.com",  # https only
-    max_retries=2,                        # 0 disables automatic retries
-    timeout=40.0,                         # seconds
+    max_retries=2,  # 0 disables automatic retries
+    timeout=40.0,  # seconds
 )
 ```
 
@@ -379,9 +387,14 @@ it to plug another HTTP stack, or to fake the network in your tests.
 ```python
 import json
 
+
 def fake_transport(request: payhub.Request) -> payhub.Response:
-    body = {"status": "success", "data": {"country": "BF", "currency": "XOF", "available": "1500.00"}}
+    body = {
+        "status": "success",
+        "data": {"country": "BF", "currency": "XOF", "available": "1500.00"},
+    }
     return payhub.Response(200, json.dumps(body))
+
 
 test_client = payhub.PayHub(api_key="key_id:secret", country="bf", transport=fake_transport)
 assert test_client.balance.get().available == "1500.00"
