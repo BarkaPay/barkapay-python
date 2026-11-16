@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import math
 import re
 import time
 from typing import Any, Union
@@ -117,8 +118,14 @@ def _raw_body(payload: object) -> bytes:
 
 def _assert(payload: _Payload, header: str | None, secret: _Secret, tolerance: float) -> None:
     key = _secret_key(secret)
-    if isinstance(tolerance, bool) or not isinstance(tolerance, (int, float)) or tolerance < 0:
-        raise ConfigurationError("`tolerance` must be a number of seconds >= 0.")
+    if (
+        isinstance(tolerance, bool)
+        or not isinstance(tolerance, (int, float))
+        or not math.isfinite(tolerance)
+        or tolerance < 0
+    ):
+        # NaN and infinity would silently switch the replay window off.
+        raise ConfigurationError("`tolerance` must be a finite number of seconds >= 0.")
 
     raw = _raw_body(payload)
 
