@@ -140,23 +140,23 @@ def test_retry_after_is_honoured_never_earlier() -> None:
     throttled = json_response(
         429,
         {"status": "error", "code": "too_many_requests", "message": "slow down"},
-        {"Retry-After": "17", "X-RateLimit-Limit": "30", "X-RateLimit-Remaining": "0"},
+        {"Retry-After": "7", "X-RateLimit-Limit": "30", "X-RateLimit-Remaining": "0"},
     )
     client, transport, sleeps = make_client([throttled, ok({"payments": []})], max_retries=2)
     client.payments.list()
     assert len(transport.requests) == 2
     assert len(sleeps) == 1
-    assert 17.0 <= sleeps[0] <= 17.25
+    assert 7.0 <= sleeps[0] <= 7.25
 
 
 def test_retry_after_http_date_is_understood() -> None:
-    header = email.utils.formatdate(time.time() + 20, usegmt=True)
+    header = email.utils.formatdate(time.time() + 8, usegmt=True)
     throttled = json_response(
         429, {"status": "error", "code": "too_many_requests"}, {"retry-after": header}
     )
     client, _, sleeps = make_client([throttled, ok({})], max_retries=1)
     client.ping()
-    assert 17.0 <= sleeps[0] <= 21.0
+    assert 5.0 <= sleeps[0] <= 9.25
 
 
 def test_a_long_retry_after_is_not_slept_through() -> None:
@@ -264,11 +264,22 @@ def test_max_retries_zero_disables_every_retry() -> None:
 
 def test_503_retry_after_from_the_api_is_honoured_on_reads() -> None:
     busy = json_response(
-        503, {"status": "error", "code": "service_unavailable"}, {"Retry-After": "30"}
+        503, {"status": "error", "code": "service_unavailable"}, {"Retry-After": "1"}
     )
     client, _, sleeps = make_client([busy, ok({})], max_retries=1)
     client.ping()
-    assert 30.0 <= sleeps[0] <= 30.25
+    assert 1.0 <= sleeps[0] <= 1.25
+
+    # The infrastructure's "come back in 30 s" is handed to the caller instead.
+    busy = json_response(
+        503, {"status": "error", "code": "service_unavailable"}, {"Retry-After": "30"}
+    )
+    client, transport, sleeps = make_client([busy, ok({})], max_retries=1)
+    with pytest.raises(ServiceUnavailableError) as exc_info:
+        client.ping()
+    assert len(transport.requests) == 1
+    assert sleeps == []
+    assert exc_info.value.retry_after == 30.0
 
 
 # --- backoff ---------------------------------------------------------------------

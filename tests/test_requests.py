@@ -170,7 +170,7 @@ def test_country_is_normalised(country: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "country", ["../admin", "bf/v1/x", "b", "bf?x=1", "b f", "bfbf", "ʙꜰ", "12"]
+    "country", ["../admin", "bf/v1/x", "b", "bf?x=1", "b f", "bfbf", "bfa", "civ", "ʙꜰ", "12"]
 )
 def test_invalid_country_is_refused(country: str) -> None:
     with pytest.raises(ConfigurationError):
@@ -219,20 +219,35 @@ def test_non_string_identifier_is_refused() -> None:
 
 def test_identifier_is_encoded_as_a_single_path_segment() -> None:
     client, transport, _ = make_client([ok({"payments": [samples.payment()]})])
-    client.payments.get("ORDER/2026 #1?x=y&z")
+    client.payments.get("ORDER 2026 x=y&z%é")
     assert (
         transport.requests[0].url
-        == "https://hub.barkapay.com/bf/v1/payments/ORDER%2F2026%20%231%3Fx%3Dy%26z"
+        == "https://hub.barkapay.com/bf/v1/payments/ORDER%202026%20x%3Dy%26z%25%C3%A9"
     )
 
 
-def test_path_traversal_in_identifier_stays_inside_the_segment() -> None:
-    client, transport, _ = make_client([ok({"transfers": [samples.transfer()]})])
-    client.transfers.get("../../bj/v1/balance")
-    assert (
-        transport.requests[0].url
-        == "https://hub.barkapay.com/bf/v1/transfers/..%2F..%2Fbj%2Fv1%2Fbalance"
-    )
+@pytest.mark.parametrize(
+    "identifier",
+    ["../../bj/v1/balance", "INV/2026/0001", "x?per_page=200", "x#frag", "?", "#", "/"],
+)
+def test_identifiers_that_could_leave_their_segment_are_refused(identifier: str) -> None:
+    client, transport, _ = make_client([])
+    calls: list[Callable[[], object]] = [
+        lambda: client.payments.get(identifier),
+        lambda: client.payments.confirm_otp(identifier, "123456"),
+        lambda: client.payments.resend_otp(identifier),
+        lambda: client.transfers.get(identifier),
+        lambda: client.payment_links.get(identifier),
+        lambda: client.payment_links.update(identifier, {"title": "x"}),
+        lambda: client.payment_links.cancel(identifier),
+        lambda: client.payment_links.pause(identifier),
+        lambda: client.payment_links.resume(identifier),
+        lambda: client.payment_links.list_payments(identifier),
+    ]
+    for call in calls:
+        with pytest.raises(ConfigurationError):
+            call()
+    assert transport.requests == []
 
 
 # --- bodies and query strings --------------------------------------------------

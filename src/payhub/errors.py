@@ -203,7 +203,15 @@ class NetworkError(PayHubError):
 
     For a request that creates money (payment, transfer) the outcome is then
     UNKNOWN — look the operation up by your ``order.id`` before trying again.
+
+    Attributes:
+        request_id: the ``X-Request-Id`` the SDK sent — quote it to support to
+            find out whether the request reached the API.
     """
+
+    def __init__(self, message: str = "", *, request_id: str | None = None) -> None:
+        super().__init__(message)
+        self.request_id = request_id
 
 
 class SignatureVerificationError(PayHubError):

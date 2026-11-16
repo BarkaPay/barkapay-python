@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from payhub import SignatureVerificationError, webhook
+from payhub import ConfigurationError, SignatureVerificationError, webhook
 
 SECRET = "whsec_test_secret"
 PAYLOAD = '{"type":"payment","public_id":"pay_1","status":"SUCCESSFUL"}'
@@ -48,9 +48,12 @@ def test_rejects_stale_timestamp() -> None:
     assert webhook.verify(PAYLOAD, header, SECRET) is False
 
 
-def test_tolerance_zero_disables_timestamp_check() -> None:
+def test_tolerance_zero_is_refused_it_would_disable_the_replay_window() -> None:
     header = _sign(PAYLOAD, int(time.time()) - 100_000)
-    assert webhook.verify(PAYLOAD, header, SECRET, tolerance=0) is True
+    with pytest.raises(ConfigurationError):
+        webhook.verify(PAYLOAD, header, SECRET, tolerance=0)
+    with pytest.raises(ConfigurationError):
+        webhook.parse(PAYLOAD, header, SECRET, tolerance=0)
 
 
 def test_rejects_malformed_header() -> None:

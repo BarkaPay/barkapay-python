@@ -11,7 +11,7 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from ._util import (
     as_dict,
@@ -37,10 +37,10 @@ _MAX_RETRIES_CAP = 10
 _BASE_DELAY_S = 0.5
 _MAX_DELAY_S = 8.0
 #: A ``Retry-After`` longer than this is not slept through: the error is
-#: raised with ``retry_after`` set and the caller decides.
-_MAX_RETRY_AFTER_S = 60.0
-#: Same, for a request that creates or changes something: money is not sent
-#: from a call that has been asleep for a minute.
+#: raised with ``retry_after`` set and the caller decides. The API asks for
+#: 10 s on a real 429; money is never sent from a call that has been asleep
+#: for longer. Same value in the PHP and Node SDKs.
+_MAX_RETRY_AFTER_S = 10.0
 _MAX_WRITE_RETRY_AFTER_S = 10.0
 
 #: Methods that are safe to send twice.
@@ -93,7 +93,8 @@ class PayHub:
         :param country: default country code (``"bf"``, ``"bj"``, ``"sn"``);
             overridable per call.
         :param base_url: API base URL. With the built-in transport it must be
-            ``https://`` (``http://`` is accepted for localhost only).
+            ``https://`` (``http://`` is accepted for localhost only). A custom
+            ``transport`` may reach a plain-http mock — never a barkapay host.
         :param max_retries: automatic retries of requests that are safe to
             repeat (at most 10): a request answered 429 by the rate limiter
             (it was not executed) and read-only (GET) requests that hit
@@ -128,11 +129,11 @@ class PayHub:
 
     def ping(self, country: str | None = None) -> dict[str, Any]:
         """Liveness check (also confirms your key works)."""
-        return self._api.request("GET", "ping", country=country).data or {}
+        return self._api.request("GET", "ping", country=country).require_data()
 
     def me(self, country: str | None = None) -> dict[str, Any]:
         """Current merchant + API application details (scopes, permissions)."""
-        return self._api.request("GET", "me", country=country).data or {}
+        return self._api.request("GET", "me", country=country).require_data()
 
 
 class _Credential:
@@ -209,6 +210,14 @@ def _normalize_base_url(base_url: object, *, https_only: bool) -> str:
         assert_safe_url(url)
     else:
         assert_safe_url(url, allow_plain_http=True)
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower().rstrip(".")
+    if parts.scheme.lower() == "http" and (
+        host == "barkapay.com" or host.endswith(".barkapay.com")
+    ):
+        raise ConfigurationError(
+            f"The barkapay API is only served over HTTPS: use {_DEFAULT_BASE_URL}."
+        )
     return url
 
 
@@ -265,6 +274,13 @@ class _ApiResult:
             data=self.data,
             headers=self.headers,
         )
+
+    def require_data(self) -> dict[str, Any]:
+        """The ``data`` object a successful call must return — never ``{}``."""
+        data = self.data
+        if data is None:
+            raise self.unexpected("`data` is missing")
+        return data
 
     def resource(self, key: str) -> dict[str, Any]:
         """The object a successful call must return — never an empty stand-in."""
@@ -353,12 +369,14 @@ class _ApiClient:
         while True:
             try:
                 response = self._transport(req)
-            except NetworkError:
+            except NetworkError as exc:
                 # The request may have reached the API: only a read is replayed.
                 if method in _SAFE_METHODS and attempt < self._max_retries:
                     self._pause(self._backoff(attempt))
                     attempt += 1
                     continue
+                if exc.request_id is None:
+                    exc.request_id = request_id
                 raise
 
             status = response.status_code
