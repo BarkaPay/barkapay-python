@@ -1,27 +1,39 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
 [project]
 name = "barkapay-payhub"
-description = "Official Python client for the PayHub payments API — mobile money & crypto, one API across countries. Import as `payhub`."
+description = "Official Python client for the barkapay API — mobile money collections, payment links and disbursements. Import as `payhub`."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{ name = "BarkaPay (PayHub)", email = "developers@payhub.africa" }]
-keywords = ["payhub", "barkapay", "payments", "mobile-money", "fintech", "africa"]
+authors = [{ name = "barkapay", email = "developers@payhub.africa" }]
+keywords = [
+    "barkapay",
+    "payhub",
+    "payments",
+    "mobile-money",
+    "payment-links",
+    "payouts",
+    "webhooks",
+    "fintech",
+    "africa",
+]
+# No "License ::" classifier: the SPDX `license` expression above replaces it (PEP 639).
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
 ]
@@ -37,18 +49,24 @@ dev = [
 
 [project.urls]
 Homepage = "https://payhub.africa/developers"
-Documentation = "https://github.com/BarkaPay/payhub-python#readme"
+Documentation = "https://payhub.africa/developers"
 Source = "https://github.com/BarkaPay/payhub-python"
 Changelog = "https://github.com/BarkaPay/payhub-python/blob/main/CHANGELOG.md"
 Issues = "https://github.com/BarkaPay/payhub-python/issues"
+Security = "https://github.com/BarkaPay/payhub-python/security/policy"
 
 [tool.hatch.version]
 path = "src/payhub/_version.py"
 
+# Core metadata is pinned to 2.4 (what 1.0.0 was published with): the version
+# hatchling emits by default moves with its releases, and the upload tooling
+# must understand it. Raise it deliberately, with a release dry run.
 [tool.hatch.build.targets.wheel]
 packages = ["src/payhub"]
+core-metadata-version = "2.4"
 
 [tool.hatch.build.targets.sdist]
+core-metadata-version = "2.4"
 include = [
     "/src",
     "/tests",
@@ -56,6 +74,7 @@ include = [
     "/README.md",
     "/LICENSE",
     "/CHANGELOG.md",
+    "/SECURITY.md",
 ]
 
 [tool.ruff]
@@ -84,7 +103,10 @@ strict = true
 files = ["src", "tests"]
 warn_unreachable = true
 warn_no_return = true
+enable_error_code = ["truthy-bool", "ignore-without-code"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+addopts = "-ra --strict-markers --strict-config"
+xfail_strict = true
+filterwarnings = ["error"]
