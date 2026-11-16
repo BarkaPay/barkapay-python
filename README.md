@@ -374,6 +374,32 @@ whatever the outcome of the first — use a new id for a deliberate new attempt.
 The default timeout is 40 seconds per connection / read (the API answers
 within 30 seconds).
 
+## Rate limits
+
+Requests are throttled per merchant and per route family (payments and
+payment links, transfer creation, transfer reads). Over the limit, the API
+answers **429** with a `Retry-After` header: the SDK waits that long (when it
+is at most 60 seconds) and retries, up to `max_retries` times, then raises
+`RateLimitError` with `.retry_after`. The limits are not published — read
+them at run time: authenticated responses carry `x-ratelimit-limit` and
+`x-ratelimit-remaining`. On errors they are in `error.headers`; a transport
+wrapper sees them on every response:
+
+```python
+base_transport = payhub.UrllibTransport()
+
+
+def watching_transport(request: payhub.Request) -> payhub.Response:
+    response = base_transport(request)
+    remaining = response.headers.get("x-ratelimit-remaining")
+    if remaining is not None and int(remaining) < 5:
+        print("close to the rate limit:", remaining, "requests left this minute")
+    return response
+
+
+paced_client = payhub.PayHub(api_key="key_id:secret", country="bf", transport=watching_transport)
+```
+
 ## Configuration
 
 ```python

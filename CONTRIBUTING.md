@@ -23,7 +23,7 @@ uv run mypy                    # static typing (strict, src + tests)
 uv run pytest                  # tests
 ```
 
-CI runs them on Python 3.9, 3.10, 3.11, 3.12 and 3.13, then builds the
+CI runs them on Python 3.9 to 3.14, then builds the
 distribution and checks it (`twine check`, `py.typed` present in the wheel).
 
 ## Scope & conventions

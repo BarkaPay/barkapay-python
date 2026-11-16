@@ -72,14 +72,13 @@ def test_create_posts_the_params_and_returns_the_link() -> None:
     assert link.order == {"id": "INV-2026-001"}
     assert link.restrictions == {"countries": ["BF"]}
     assert link.collect == {}
-    assert link.notify_email_invoice is False
+    assert link.notify == {"email_invoice": False}
     assert link.expires_at is None
     assert link.stats.payments_count == 2
     assert link.stats.total_collected == "30000"
     assert link.stats.total_collected_decimal == Decimal("30000")
     assert link.paid_by_payment_public_id is None
     assert link.created_at == "2026-11-16T07:00:00+00:00"
-    assert link.raw["notify"] == {"email_invoice": False}
 
 
 def test_create_validation_error_exposes_the_fields() -> None:
@@ -289,4 +288,4 @@ def test_link_hydrates_from_a_minimal_payload() -> None:
     assert link.amount.type is None
     assert link.stats.payments_count is None
     assert link.collect == {}
-    assert link.notify_email_invoice is None
+    assert link.notify == {}

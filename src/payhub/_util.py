@@ -38,11 +38,6 @@ def as_int(data: Mapping[str, Any], key: str) -> int | None:
     return None
 
 
-def as_bool(data: Mapping[str, Any], key: str) -> bool | None:
-    value = data.get(key)
-    return value if isinstance(value, bool) else None
-
-
 def as_amount(data: Mapping[str, Any], key: str) -> int | float | str | None:
     """Amount exactly as returned by the API (a JSON number for mobile money,
     a decimal string elsewhere). Returned as-is to avoid lossy coercion; use
