@@ -7,8 +7,8 @@ import threading
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from payhub import PayHub
-from payhub.http import Request, Response
+from barkapay import BarkaPay
+from barkapay.http import Request, Response
 
 
 class FakeTransport:
@@ -56,11 +56,11 @@ def make_client(
     *,
     max_retries: int = 0,
     country: str = "bf",
-) -> tuple[PayHub, FakeTransport, list[float]]:
+) -> tuple[BarkaPay, FakeTransport, list[float]]:
     """A client wired to a :class:`FakeTransport`, whose sleeps are recorded
     instead of slept and whose jitter is deterministic (upper bound)."""
     transport = FakeTransport(responses)
-    client = PayHub(
+    client = BarkaPay(
         api_key="pk_live_test:sk_live_test",
         country=country,
         max_retries=max_retries,

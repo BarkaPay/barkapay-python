@@ -9,11 +9,11 @@ import os
 import sys
 import time
 
-import payhub
-from payhub import NetworkError, PayHubError, PaymentFailedError, PaymentStatus
+import barkapay
+from barkapay import BarkaPayError, NetworkError, PaymentFailedError, PaymentStatus
 
 
-def main(client: payhub.PayHub) -> payhub.Payment | None:
+def main(client: barkapay.BarkaPay) -> barkapay.Payment | None:
     order_id = f"ORDER-{int(time.time())}"
     try:
         # `otp` is only needed for operators that take the payer's code
@@ -42,10 +42,10 @@ def main(client: payhub.PayHub) -> payhub.Payment | None:
         print(f"No answer ({exc}); checking {order_id} before anything else", file=sys.stderr)
         try:
             recorded = client.payments.list({"order_id": order_id})
-        except PayHubError:
+        except BarkaPayError:
             return None  # still unknown: check again later, do not re-send
         return recorded[0] if len(recorded) else None
-    except PayHubError as exc:
+    except BarkaPayError as exc:
         print(f"barkapay error: {exc}", file=sys.stderr)
         return None
 
@@ -62,4 +62,4 @@ def main(client: payhub.PayHub) -> payhub.Payment | None:
 
 
 if __name__ == "__main__":
-    main(payhub.PayHub(api_key=os.environ["BARKAPAY_API_KEY"], country="bf"))
+    main(barkapay.BarkaPay(api_key=os.environ["BARKAPAY_API_KEY"], country="bf"))

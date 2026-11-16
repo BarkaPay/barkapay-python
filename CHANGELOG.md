@@ -6,6 +6,38 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-16
+
+The SDK takes its final name. 2.0 is a rename of 1.1.0 plus one security fix:
+same resources, same methods, same retry rules (reads replayed on 429, 502,
+503, 504 and network errors; writes only on a 429 asking for 10 seconds or
+less).
+
+### Changed (breaking)
+
+- PyPI distribution `barkapay-payhub` → **`barkapay`**, and the import package
+  `payhub` → **`barkapay`**. The old distribution is retired and receives no
+  further release. (The PyPI project named `payhub` was never ours.)
+- Client class `PayHub` → **`BarkaPay`**.
+- Base exception `PayHubError` → **`BarkaPayError`**.
+- `User-Agent` sent to the API: `barkapay-python/<version> python/<version>`.
+- Repository moved to `github.com/BarkaPay/barkapay-python`; documentation at
+  `https://barkapay.com/developers`.
+
+### Security
+
+- `repr()` / `str()` of a `Request` no longer print its body, only its size:
+  a confirm-OTP request used to show the payer's OTP (and a payment request
+  the phone number) in logs and tracebacks.
+
+### Migrating from 1.x
+
+1. `pip uninstall barkapay-payhub && pip install "barkapay>=2,<3"`
+2. `import payhub` → `import barkapay`, `from payhub import …` →
+   `from barkapay import …`.
+3. `payhub.PayHub(...)` → `barkapay.BarkaPay(...)`, `PayHubError` →
+   `BarkaPayError`.
+
 ## [1.1.0] - 2026-11-16
 
 No public name was removed or renamed and every 1.0.0 call keeps its
@@ -151,6 +183,7 @@ signature. Several behaviours are deliberately stricter or safer — read
 - Zero-dependency `urllib` transport with automatic retries on 429/503/network,
   and an injectable `Transport` for tests.
 
-[Unreleased]: https://github.com/BarkaPay/payhub-python/compare/v1.1.0...HEAD
-[1.1.0]: https://github.com/BarkaPay/payhub-python/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/BarkaPay/payhub-python/releases/tag/v1.0.0
+[Unreleased]: https://github.com/BarkaPay/barkapay-python/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/BarkaPay/barkapay-python/compare/v1.1.0...v2.0.0
+[1.1.0]: https://github.com/BarkaPay/barkapay-python/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/BarkaPay/barkapay-python/releases/tag/v1.0.0

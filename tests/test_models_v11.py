@@ -7,7 +7,7 @@ from decimal import Decimal
 
 import pytest
 
-from payhub import (
+from barkapay import (
     Balance,
     Pagination,
     Payment,

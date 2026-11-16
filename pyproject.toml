@@ -3,16 +3,15 @@ requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
 [project]
-name = "barkapay-payhub"
-description = "Official Python client for the barkapay API — mobile money collections, payment links and disbursements. Import as `payhub`."
+name = "barkapay"
+description = "Official Python client for the barkapay API — mobile money collections, payment links and disbursements."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{ name = "barkapay", email = "developers@payhub.africa" }]
+authors = [{ name = "barkapay" }]
 keywords = [
     "barkapay",
-    "payhub",
     "payments",
     "mobile-money",
     "payment-links",
@@ -49,21 +48,21 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://payhub.africa/developers"
-Documentation = "https://payhub.africa/developers"
-Source = "https://github.com/BarkaPay/payhub-python"
-Changelog = "https://github.com/BarkaPay/payhub-python/blob/main/CHANGELOG.md"
-Issues = "https://github.com/BarkaPay/payhub-python/issues"
-Security = "https://github.com/BarkaPay/payhub-python/security/policy"
+Homepage = "https://barkapay.com/developers"
+Documentation = "https://barkapay.com/developers"
+Source = "https://github.com/BarkaPay/barkapay-python"
+Changelog = "https://github.com/BarkaPay/barkapay-python/blob/main/CHANGELOG.md"
+Issues = "https://github.com/BarkaPay/barkapay-python/issues"
+Security = "https://github.com/BarkaPay/barkapay-python/security/policy"
 
 [tool.hatch.version]
-path = "src/payhub/_version.py"
+path = "src/barkapay/_version.py"
 
 # Core metadata is pinned to 2.4 (what 1.0.0 was published with): the version
 # hatchling emits by default moves with its releases, and the upload tooling
 # must understand it. Raise it deliberately, with a release dry run.
 [tool.hatch.build.targets.wheel]
-packages = ["src/payhub"]
+packages = ["src/barkapay"]
 core-metadata-version = "2.4"
 
 [tool.hatch.build.targets.sdist]
@@ -97,7 +96,7 @@ select = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["payhub"]
+known-first-party = ["barkapay"]
 
 [tool.mypy]
 strict = true

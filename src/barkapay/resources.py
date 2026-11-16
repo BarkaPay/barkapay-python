@@ -44,7 +44,7 @@ class Payments:
         (the verdict comes by webhook; open ``redirect_url`` when set). The
         returned object is a short snapshot — :meth:`get` gives the full one.
 
-        A refusal is raised as :class:`~payhub.errors.PaymentFailedError`
+        A refusal is raised as :class:`~barkapay.errors.PaymentFailedError`
         (HTTP 424) carrying the ``FAILED`` payment in ``.payment``.
 
         This call is never retried automatically after a timeout, a network
@@ -99,7 +99,7 @@ class Payments:
         received (two-step OTP operators — currently MOOV in Burkina Faso).
 
         Pass the code as a **string**: leading zeros are significant.
-        A refused code raises :class:`~payhub.errors.PaymentFailedError`.
+        A refused code raises :class:`~barkapay.errors.PaymentFailedError`.
         """
         segment = path_segment(public_id, "public_id")
         result = self._api.request(
@@ -249,7 +249,7 @@ class Transfers:
         A status of ``UNCERTAIN`` means the operator did not answer clearly:
         the payout may have been executed — do NOT send it again, the
         ``transfer.*`` webhook carries the verdict. A definitive refusal is
-        raised as :class:`~payhub.errors.TransferFailedError` (HTTP 424).
+        raised as :class:`~barkapay.errors.TransferFailedError` (HTTP 424).
 
         This call is never retried automatically after a timeout, a network
         error or a 5xx. After such an error the outcome is unknown: send

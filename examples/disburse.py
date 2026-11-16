@@ -10,18 +10,18 @@ import sys
 import time
 from decimal import Decimal
 
-import payhub
-from payhub import (
+import barkapay
+from barkapay import (
+    BarkaPayError,
     ConflictError,
     InsufficientBalanceError,
     NetworkError,
-    PayHubError,
     TransferFailedError,
     TransferStatus,
 )
 
 
-def main(client: payhub.PayHub) -> payhub.Transfer | None:
+def main(client: barkapay.BarkaPay) -> barkapay.Transfer | None:
     order_id = f"PAYOUT-{int(time.time())}"
     try:
         transfer = client.transfers.create(
@@ -50,10 +50,10 @@ def main(client: payhub.PayHub) -> payhub.Transfer | None:
         print(f"No answer ({exc}); checking {order_id} before anything else", file=sys.stderr)
         try:
             recorded = client.transfers.list({"order_id": order_id})
-        except PayHubError:
+        except BarkaPayError:
             return None  # still unknown: check again later, do not re-send
         return recorded[0] if len(recorded) else None
-    except PayHubError as exc:
+    except BarkaPayError as exc:
         print(f"barkapay error: {exc}", file=sys.stderr)
         return None
 
@@ -67,4 +67,4 @@ def main(client: payhub.PayHub) -> payhub.Transfer | None:
 
 
 if __name__ == "__main__":
-    main(payhub.PayHub(api_key=os.environ["BARKAPAY_API_KEY"], country="bf"))
+    main(barkapay.BarkaPay(api_key=os.environ["BARKAPAY_API_KEY"], country="bf"))

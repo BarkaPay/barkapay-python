@@ -19,8 +19,8 @@ from typing import Any
 
 import pytest
 
-import payhub
-from payhub import webhook
+import barkapay
+from barkapay import webhook
 from tests import samples
 from tests.routing import ApiDouble
 from tests.support import json_response
@@ -49,15 +49,15 @@ def _namespace(api: ApiDouble) -> dict[str, Any]:
             "event_id": "dlv:1",
         }
     ).encode()
-    client = payhub.PayHub(api_key="key_id:secret", country="bf", transport=api)
+    client = barkapay.BarkaPay(api_key="key_id:secret", country="bf", transport=api)
     params = {"operator": "ORANGE", "phone_number": "74123456", "amount": 10000}
     return {
-        "payhub": payhub,
+        "barkapay": barkapay,
         "client": client,
         "params": params,
         "public_id": samples.PAYMENT_ID,
         "otp": "123456",
-        "link": payhub.PaymentLink.from_dict(samples.payment_link()),
+        "link": barkapay.PaymentLink.from_dict(samples.payment_link()),
         "raw_body": raw_body,
         "signature_header": _signed(raw_body),
         "endpoint_secret": SECRET,
@@ -97,14 +97,14 @@ def test_readme_block_runs(index: int, monkeypatch: pytest.MonkeyPatch) -> None:
     api = ApiDouble()
     # The quick-start and configuration blocks build their own client: route
     # it to the double instead of the network.
-    monkeypatch.setattr(payhub.client, "UrllibTransport", lambda timeout: api)
+    monkeypatch.setattr(barkapay.client, "UrllibTransport", lambda timeout: api)
     exec(code, _namespace(api))
 
 
 def test_readme_quick_start_sends_the_documented_request(monkeypatch: pytest.MonkeyPatch) -> None:
     api = ApiDouble()
-    monkeypatch.setattr(payhub.client, "UrllibTransport", lambda timeout: api)
-    quick_start = next(b for b in _python_blocks() if "client = payhub.PayHub(" in b)
+    monkeypatch.setattr(barkapay.client, "UrllibTransport", lambda timeout: api)
+    quick_start = next(b for b in _python_blocks() if "client = barkapay.BarkaPay(" in b)
 
     namespace: dict[str, Any] = {}
     exec(compile(quick_start, "README.md[quick start]", "exec"), namespace)
@@ -120,7 +120,7 @@ def test_readme_quick_start_sends_the_documented_request(monkeypatch: pytest.Mon
         "otp": "123456",
         "order": {"id": "ORDER-2026-001"},
     }
-    assert namespace["payment"].status is payhub.PaymentStatus.SUCCESSFUL
+    assert namespace["payment"].status is barkapay.PaymentStatus.SUCCESSFUL
 
 
 def test_readme_payment_links_block_covers_the_whole_resource() -> None:
@@ -147,13 +147,13 @@ def test_readme_names_the_real_signature_header_and_no_stale_one() -> None:
 
 
 def test_readme_documents_every_public_error() -> None:
-    for name in payhub.__all__:
+    for name in barkapay.__all__:
         if name.endswith("Error"):
             assert name in README, f"{name} is not documented in the README"
 
 
 def test_readme_documents_every_resource_method() -> None:
-    client = payhub.PayHub(api_key="key_id:secret", country="bf", transport=ApiDouble())
+    client = barkapay.BarkaPay(api_key="key_id:secret", country="bf", transport=ApiDouble())
     for resource in ("payments", "payment_links", "transfers", "balance", "operators"):
         for method in dir(getattr(client, resource)):
             if not method.startswith("_"):
@@ -173,14 +173,14 @@ def _load_example(name: str) -> ModuleType:
     return module
 
 
-def _client(api: Any) -> payhub.PayHub:
-    return payhub.PayHub(api_key="key_id:secret", country="bf", transport=api, max_retries=0)
+def _client(api: Any) -> barkapay.BarkaPay:
+    return barkapay.BarkaPay(api_key="key_id:secret", country="bf", transport=api, max_retries=0)
 
 
 def test_example_collect(capsys: pytest.CaptureFixture[str]) -> None:
     api = ApiDouble()
     payment = _load_example("collect").main(_client(api))
-    assert payment.status is payhub.PaymentStatus.SUCCESSFUL
+    assert payment.status is barkapay.PaymentStatus.SUCCESSFUL
     assert api.calls() == ["POST /payments"]
     assert json.loads(api.requests[0].body or "{}")["order"]["unique"] is True
     assert "settled" in capsys.readouterr().out
@@ -197,7 +197,7 @@ def test_example_collect_reports_a_refusal(capsys: pytest.CaptureFixture[str]) -
         },
     )
     payment = _load_example("collect").main(_client(lambda request: refused))
-    assert payment.status is payhub.PaymentStatus.FAILED
+    assert payment.status is barkapay.PaymentStatus.FAILED
     assert "payer_insufficient_funds" in capsys.readouterr().err
 
 
@@ -214,10 +214,10 @@ def test_example_disburse(capsys: pytest.CaptureFixture[str]) -> None:
 def test_example_disburse_looks_the_transfer_up_after_a_network_error() -> None:
     calls: list[str] = []
 
-    def flaky(request: payhub.Request) -> payhub.Response:
+    def flaky(request: barkapay.Request) -> barkapay.Response:
         calls.append(request.method)
         if request.method == "POST":
-            raise payhub.NetworkError("timed out")
+            raise barkapay.NetworkError("timed out")
         return ApiDouble()(request)
 
     transfer = _load_example("disburse").main(_client(flaky))
@@ -279,15 +279,15 @@ def test_readme_recipe_after_an_unknown_outcome_never_posts_twice(recorded: bool
     block = next(b for b in _python_blocks() if "existing = client.transfers.list(" in b)
     seen: list[str] = []
 
-    def flaky(request: payhub.Request) -> payhub.Response:
+    def flaky(request: barkapay.Request) -> barkapay.Response:
         seen.append(f"{request.method} {request.url.split('/v1/')[1]}")
         if request.method == "POST":
-            raise payhub.NetworkError("The read operation timed out")
+            raise barkapay.NetworkError("The read operation timed out")
         rows = [samples.transfer(order_id="PAYOUT-2026-001")] if recorded else []
         return json_response(200, {"status": "success", "data": {"transfers": rows}})
 
     namespace = _namespace(ApiDouble())
-    namespace["client"] = payhub.PayHub(api_key="key_id:secret", country="bf", transport=flaky)
+    namespace["client"] = barkapay.BarkaPay(api_key="key_id:secret", country="bf", transport=flaky)
     exec(compile(block, "README.md[unknown outcome]", "exec"), namespace)
 
     assert seen == ["POST transfers", "GET transfers?order_id=PAYOUT-2026-001"]

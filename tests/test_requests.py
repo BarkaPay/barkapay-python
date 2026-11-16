@@ -9,8 +9,8 @@ from decimal import Decimal
 
 import pytest
 
-from payhub import ApiError, ConfigurationError, PayHub, PayHubError, Request, __version__
-from payhub.http import Response
+from barkapay import ApiError, BarkaPay, BarkaPayError, ConfigurationError, Request, __version__
+from barkapay.http import Response
 from tests import samples
 from tests.support import FakeTransport, json_response, make_client, ok, sent_json
 
@@ -24,12 +24,12 @@ def test_user_agent_carries_sdk_and_python_versions() -> None:
     client, transport, _ = make_client([ok({})])
     client.ping()
     user_agent = transport.requests[0].headers["User-Agent"]
-    assert user_agent.startswith(f"payhub-python/{__version__} python/3.")
+    assert user_agent.startswith(f"barkapay-python/{__version__} python/3.")
 
 
-def test_version_is_1_1_0() -> None:
-    assert __version__ == "1.1.0"
-    assert PayHub.VERSION == "1.1.0"
+def test_version_is_2_0_0() -> None:
+    assert __version__ == "2.0.0"
+    assert BarkaPay.VERSION == "2.0.0"
 
 
 def test_default_base_url_is_the_public_hub() -> None:
@@ -54,7 +54,7 @@ def test_request_id_is_stable_across_retries() -> None:
 
 def test_repr_of_client_and_request_never_show_the_key() -> None:
     transport = FakeTransport([ok({})])
-    client = PayHub(api_key=KEY, country="bf", transport=transport)
+    client = BarkaPay(api_key=KEY, country="bf", transport=transport)
     client.ping()
 
     request = transport.requests[0]
@@ -76,6 +76,21 @@ def test_request_repr_redacts_every_credential_header() -> None:
     assert "a:b" not in text
     assert "kid" not in text
     assert "application/json" in text
+
+
+def test_request_repr_never_shows_the_body() -> None:
+    # An OTP (or a phone number) travels in the body: repr() gives its size only.
+    transport = FakeTransport([ok({"payment": {"public_id": "pay_1", "status": "SUCCESSFUL"}})])
+    client = BarkaPay(api_key=KEY, country="bf", transport=transport)
+    client.payments.confirm_otp("pay_1", "481516")
+
+    request = transport.requests[0]
+    assert request.body is not None and "481516" in request.body  # sent on the wire…
+    for text in (repr(request), str(request), f"{request}", repr([request])):
+        assert "481516" not in text  # …never printed
+        assert '"otp"' not in text
+    assert f"body='[{len(request.body)} bytes]'" in repr(request)
+    assert "body=None" in repr(Request("GET", "https://hub.barkapay.com/bf/v1/ping"))
 
 
 def test_errors_never_echo_the_key() -> None:
@@ -101,21 +116,21 @@ def test_errors_never_echo_the_key() -> None:
 )
 def test_malformed_api_key_is_refused_without_echoing_it(bad_key: str) -> None:
     with pytest.raises(ConfigurationError) as exc_info:
-        PayHub(api_key=bad_key, country="bf")
+        BarkaPay(api_key=bad_key, country="bf")
     assert "SUPER" not in str(exc_info.value)
 
 
 def test_non_string_credentials_are_refused() -> None:
     with pytest.raises(ConfigurationError):
-        PayHub(api_key=b"pk:sk", country="bf")  # type: ignore[arg-type]
+        BarkaPay(api_key=b"pk:sk", country="bf")  # type: ignore[arg-type]
     with pytest.raises(ConfigurationError):
-        PayHub(key_id="pk", secret=None, country="bf")
+        BarkaPay(key_id="pk", secret=None, country="bf")
 
 
 def test_configuration_error_is_also_a_value_error() -> None:
     with pytest.raises(ValueError):
-        PayHub(country="bf")
-    assert issubclass(ConfigurationError, PayHubError)
+        BarkaPay(country="bf")
+    assert issubclass(ConfigurationError, BarkaPayError)
 
 
 # --- base URL: https only ------------------------------------------------------
@@ -140,7 +155,7 @@ def test_configuration_error_is_also_a_value_error() -> None:
 )
 def test_unsafe_base_url_is_refused(base_url: str) -> None:
     with pytest.raises(ConfigurationError):
-        PayHub(api_key=KEY, country="bf", base_url=base_url)
+        BarkaPay(api_key=KEY, country="bf", base_url=base_url)
 
 
 @pytest.mark.parametrize(
@@ -155,7 +170,7 @@ def test_unsafe_base_url_is_refused(base_url: str) -> None:
 )
 def test_accepted_base_urls(base_url: str, expected: str) -> None:
     transport = FakeTransport([ok({})])
-    PayHub(api_key=KEY, country="bf", base_url=base_url, transport=transport).ping()
+    BarkaPay(api_key=KEY, country="bf", base_url=base_url, transport=transport).ping()
     assert transport.requests[0].url == expected
 
 
@@ -174,7 +189,7 @@ def test_country_is_normalised(country: str) -> None:
 )
 def test_invalid_country_is_refused(country: str) -> None:
     with pytest.raises(ConfigurationError):
-        PayHub(api_key=KEY, country=country)
+        BarkaPay(api_key=KEY, country=country)
     client, transport, _ = make_client([ok({})])
     with pytest.raises(ConfigurationError):
         client.ping(country)
@@ -183,7 +198,7 @@ def test_invalid_country_is_refused(country: str) -> None:
 
 def test_missing_country_is_refused_before_any_request() -> None:
     transport = FakeTransport([ok({})])
-    client = PayHub(api_key=KEY, transport=transport)
+    client = BarkaPay(api_key=KEY, transport=transport)
     with pytest.raises(ConfigurationError):
         client.balance.get()
     assert transport.requests == []
@@ -410,7 +425,7 @@ def test_ping_and_me_return_the_data_block() -> None:
 )
 @pytest.mark.parametrize("envelope", [{"status": "success"}, {"status": "success", "data": []}])
 def test_a_malformed_success_is_never_passed_off_as_an_empty_result(
-    call: Callable[[PayHub], object], envelope: dict[str, object]
+    call: Callable[[BarkaPay], object], envelope: dict[str, object]
 ) -> None:
     client, _, _ = make_client([json_response(200, envelope)])
     with pytest.raises(ApiError) as exc_info:

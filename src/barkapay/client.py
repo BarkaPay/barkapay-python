@@ -26,7 +26,7 @@ from .errors import ApiError, ConfigurationError, NetworkError
 from .http import Request, Transport, UrllibTransport, assert_safe_url
 from .resources import BalanceResource, Operators, PaymentLinks, Payments, Transfers
 
-__all__ = ["PayHub"]
+__all__ = ["BarkaPay"]
 
 _DEFAULT_BASE_URL = "https://hub.barkapay.com"
 #: The hub gives a gateway 30 s to answer; waiting a little longer lets the
@@ -53,12 +53,12 @@ _TRANSIENT_STATUSES = frozenset({502, 503, 504})
 _TOKEN_RE = re.compile(r"[\x21-\x7e]+")
 
 
-class PayHub:
+class BarkaPay:
     """Entry point to the barkapay API.
 
     Example::
 
-        client = PayHub(api_key="key_id:secret", country="bf")
+        client = BarkaPay(api_key="key_id:secret", country="bf")
         payment = client.payments.create({
             "operator": "ORANGE",
             "phone_number": "74123456",
@@ -103,7 +103,7 @@ class PayHub:
             a 5xx. ``0`` disables retries.
         :param timeout: seconds allowed for the connection and for each read
             (built-in transport only; a custom ``transport`` manages its own).
-        :param transport: a custom :class:`~payhub.http.Transport` (e.g. a fake in tests).
+        :param transport: a custom :class:`~barkapay.http.Transport` (e.g. a fake in tests).
         """
         if isinstance(max_retries, bool) or not isinstance(max_retries, int):
             raise ConfigurationError("`max_retries` must be an integer.")
@@ -114,7 +114,7 @@ class PayHub:
             base_url=_normalize_base_url(base_url, https_only=transport is None),
             default_country=_normalize_default_country(country),
             max_retries=min(max(0, max_retries), _MAX_RETRIES_CAP),
-            user_agent=f"payhub-python/{__version__} python/{platform.python_version()}",
+            user_agent=f"barkapay-python/{__version__} python/{platform.python_version()}",
         )
 
         self.payments = Payments(self._api)
@@ -125,7 +125,7 @@ class PayHub:
 
     def __repr__(self) -> str:
         # Never include the credential.
-        return f"PayHub(country={self._api.default_country!r}, base_url={self._api.base_url!r})"
+        return f"BarkaPay(country={self._api.default_country!r}, base_url={self._api.base_url!r})"
 
     def ping(self, country: str | None = None) -> dict[str, Any]:
         """Liveness check (also confirms your key works)."""
@@ -336,7 +336,9 @@ class _ApiClient:
         self._uniform: Callable[[float, float], float] | None = None
 
     def __repr__(self) -> str:
-        return f"<payhub API client country={self._default_country!r} base_url={self._base_url!r}>"
+        return (
+            f"<barkapay API client country={self._default_country!r} base_url={self._base_url!r}>"
+        )
 
     @property
     def base_url(self) -> str:

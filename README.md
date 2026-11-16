@@ -1,6 +1,6 @@
 # barkapay Python SDK
 
-Official Python client for the [barkapay API](https://payhub.africa/developers) —
+Official Python client for the [barkapay API](https://barkapay.com/developers) —
 mobile money collections, payment links and disbursements behind one contract
 (Burkina Faso, Bénin, Sénégal).
 
@@ -11,7 +11,7 @@ mobile money collections, payment links and disbursements behind one contract
 - Safe by default: TLS always verified, HTTPS only, redirects never followed,
   and **a request that moves money is never replayed blindly**.
 
-The distribution is `barkapay-payhub`; you import it as `payhub`.
+Install `barkapay`, import `barkapay`.
 
 ## Requirements
 
@@ -20,19 +20,20 @@ Python **3.9+**.
 ## Install
 
 ```bash
-pip install barkapay-payhub
+pip install barkapay
 ```
 
-> The package to install is **`barkapay-payhub`**. The PyPI project named
-> `payhub` is an unrelated product from another company — do not install it,
-> and never give it your API key.
+> Up to 1.x this SDK was published as `barkapay-payhub` and imported as `payhub`.
+> Those names are retired: see [Upgrading from 1.x](#upgrading-from-1x). The PyPI
+> project named `payhub` is an unrelated product from another company — do not
+> install it, and never give it your API key.
 
 ## Quick start
 
 ```python
-import payhub
+import barkapay
 
-client = payhub.PayHub(
+client = barkapay.BarkaPay(
     api_key="key_id:secret",  # exactly what you copy from the dashboard
     country="bf",  # default country (bf, bj, sn) — overridable per call
 )
@@ -66,9 +67,9 @@ client.balance.get(country="sn")  # another country your key is enabled for
 ## Payments
 
 ```python
-client.payments.create(params)  # -> payhub.Payment
-client.payments.get("public_id or order id")  # -> payhub.Payment
-client.payments.list({"status": "SUCCESSFUL", "per_page": 50})  # -> payhub.PaymentList
+client.payments.create(params)  # -> barkapay.Payment
+client.payments.get("public_id or order id")  # -> barkapay.Payment
+client.payments.list({"status": "SUCCESSFUL", "per_page": 50})  # -> barkapay.PaymentList
 client.payments.confirm_otp(public_id, "123456")  # for AWAITING_OTP payments
 client.payments.resend_otp(public_id)
 ```
@@ -93,12 +94,12 @@ A payment that the payer or the operator **refuses** is not returned: it is
 raised as `PaymentFailedError`, with the `FAILED` payment attached.
 
 ```python
-from payhub import PaymentFailedError, PaymentStatus, ReasonCode
+from barkapay import PaymentFailedError, PaymentStatus, ReasonCode
 
 try:
     payment = client.payments.create(params)
 except PaymentFailedError as error:
-    failed = error.payment  # payhub.Payment, status FAILED
+    failed = error.payment  # barkapay.Payment, status FAILED
     print(failed.public_id, error.reason_code, failed.provider_reason)
     if error.reason_code == ReasonCode.PAYER_INSUFFICIENT_FUNDS:
         ...  # tell the customer
@@ -188,7 +189,7 @@ transfer = client.transfers.create(
 client.transfers.get("public_id or order id")
 client.transfers.list(
     {"from_date": "2026-11-01", "to_date": "2026-11-30"}
-)  # -> payhub.TransferList
+)  # -> barkapay.TransferList
 ```
 
 - A definitive refusal raises `TransferFailedError` (the `FAILED` transfer is
@@ -204,7 +205,7 @@ client.transfers.list(
 ## Balance & operators
 
 ```python
-balance = client.balance.get()  # payhub.Balance
+balance = client.balance.get()  # barkapay.Balance
 print(balance.available, balance.currency, balance.available_decimal)
 
 client.operators.info()  # operators of the country: OTP, amount bounds…
@@ -242,7 +243,7 @@ Final outcomes are pushed to your HTTPS endpoint, signed with the
 delivery against the **raw request body**:
 
 ```python
-from payhub import SignatureVerificationError, webhook
+from barkapay import SignatureVerificationError, webhook
 
 try:
     event = webhook.parse(
@@ -319,7 +320,7 @@ A complete receiver is in [`examples/webhook.py`](examples/webhook.py).
 
 ## Errors
 
-Every API error raises a typed exception extending `payhub.ApiError`, with
+Every API error raises a typed exception extending `barkapay.ApiError`, with
 `.code`, `.http_status`, `.request_id` (quote it to support), `.errors`
 (field → messages), `.data`, `.retry_after` and `.headers`:
 
@@ -348,10 +349,10 @@ answered 2xx — the request was **accepted** — but the body could not be read
 (a proxy page, a cut-off answer). After a create call, treat it like a
 `NetworkError`: check before sending again.
 
-Catch everything from the SDK with `payhub.PayHubError`.
+Catch everything from the SDK with `barkapay.BarkaPayError`.
 
 ```python
-from payhub import ApiError, NetworkError, RateLimitError, ValidationError
+from barkapay import ApiError, NetworkError, RateLimitError, ValidationError
 
 try:
     client.transfers.create(params)
@@ -393,7 +394,7 @@ safe in two steps:
 order_id = "PAYOUT-2026-001"
 try:
     transfer = client.transfers.create({**params, "order": {"id": order_id, "unique": True}})
-except (payhub.NetworkError, payhub.ServerError, payhub.ServiceUnavailableError):
+except (barkapay.NetworkError, barkapay.ServerError, barkapay.ServiceUnavailableError):
     existing = client.transfers.list({"order_id": order_id})
     transfer = existing[0] if len(existing) else None  # None: it was never recorded
 ```
@@ -420,10 +421,10 @@ them at run time: authenticated responses carry `x-ratelimit-limit` and
 wrapper sees them on every response:
 
 ```python
-base_transport = payhub.UrllibTransport()
+base_transport = barkapay.UrllibTransport()
 
 
-def watching_transport(request: payhub.Request) -> payhub.Response:
+def watching_transport(request: barkapay.Request) -> barkapay.Response:
     response = base_transport(request)
     remaining = response.headers.get("x-ratelimit-remaining")
     if remaining is not None and int(remaining) < 5:
@@ -431,13 +432,15 @@ def watching_transport(request: payhub.Request) -> payhub.Response:
     return response
 
 
-paced_client = payhub.PayHub(api_key="key_id:secret", country="bf", transport=watching_transport)
+paced_client = barkapay.BarkaPay(
+    api_key="key_id:secret", country="bf", transport=watching_transport
+)
 ```
 
 ## Configuration
 
 ```python
-client = payhub.PayHub(
+client = barkapay.BarkaPay(
     api_key="key_id:secret",
     country="bf",
     base_url="https://hub.barkapay.com",  # https only (http for localhost)
@@ -446,7 +449,7 @@ client = payhub.PayHub(
 )
 ```
 
-`transport=` accepts any callable `(payhub.Request) -> payhub.Response`: use
+`transport=` accepts any callable `(barkapay.Request) -> barkapay.Response`: use
 it to plug another HTTP stack, or to fake the network in your tests. A custom
 transport owns its connection: it must verify TLS, must not follow redirects,
 and `timeout` does not apply to it.
@@ -455,15 +458,15 @@ and `timeout` does not apply to it.
 import json
 
 
-def fake_transport(request: payhub.Request) -> payhub.Response:
+def fake_transport(request: barkapay.Request) -> barkapay.Response:
     body = {
         "status": "success",
         "data": {"country": "BF", "currency": "XOF", "available": "1500.00"},
     }
-    return payhub.Response(200, json.dumps(body))
+    return barkapay.Response(200, json.dumps(body))
 
 
-test_client = payhub.PayHub(api_key="key_id:secret", country="bf", transport=fake_transport)
+test_client = barkapay.BarkaPay(api_key="key_id:secret", country="bf", transport=fake_transport)
 assert test_client.balance.get().available == "1500.00"
 ```
 
@@ -473,7 +476,7 @@ A client holds no per-request state: create one and share it between threads.
 
 - TLS certificates and host names are always verified; there is no option to
   turn that off. A custom CA bundle goes through
-  `payhub.UrllibTransport(context=...)`, which refuses a non-verifying context.
+  `barkapay.UrllibTransport(context=...)`, which refuses a non-verifying context.
 - With the built-in transport only `https://` base URLs are accepted
   (`http://` for `localhost`, `127.0.0.1` and `::1` only). A custom transport
   may reach a plain-http mock, never a barkapay host.
@@ -493,10 +496,10 @@ not look for a way to skip verification:
 import ssl
 
 context = ssl.create_default_context(cafile="/etc/ssl/certs/ca-certificates.crt")
-client = payhub.PayHub(
+client = barkapay.BarkaPay(
     api_key="key_id:secret",
     country="bf",
-    transport=payhub.UrllibTransport(timeout=40.0, context=context),
+    transport=barkapay.UrllibTransport(timeout=40.0, context=context),
 )
 ```
 
@@ -508,6 +511,27 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 This project follows [Semantic Versioning](https://semver.org/); changes are
 listed in [CHANGELOG.md](CHANGELOG.md).
+
+## Upgrading from 1.x
+
+2.0 is the same SDK under its final name: the distribution, the import package
+and two classes were renamed.
+
+```bash
+pip uninstall barkapay-payhub
+pip install "barkapay>=2,<3"
+```
+
+- `import payhub` → `import barkapay` (and `from payhub import …` →
+  `from barkapay import …`);
+- `payhub.PayHub(...)` → `barkapay.BarkaPay(...)`;
+- `PayHubError` → `BarkaPayError`;
+- the `User-Agent` sent to the API is now `barkapay-python/2.0.0 …`;
+- `repr()` of a `Request` shows the size of its body, no longer its content.
+
+Still on 1.0? Also read the 1.1 notes in [CHANGELOG.md](CHANGELOG.md): writes
+are no longer replayed after a timeout, a network error or a 5xx (they could be
+executed twice), redirects are never followed and `base_url` must be HTTPS.
 
 ## License
 

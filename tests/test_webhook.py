@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from payhub import ConfigurationError, SignatureVerificationError, webhook
+from barkapay import ConfigurationError, SignatureVerificationError, webhook
 
 SECRET = "whsec_test_secret"
 PAYLOAD = '{"type":"payment","public_id":"pay_1","status":"SUCCESSFUL"}'

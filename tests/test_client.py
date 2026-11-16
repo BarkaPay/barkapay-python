@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from payhub import PayHub, Payment, PaymentStatus
+from barkapay import BarkaPay, Payment, PaymentStatus
 from tests.support import FakeTransport, json_response
 
 
@@ -27,7 +27,7 @@ def test_create_payment_builds_signed_country_scoped_request() -> None:
         ]
     )
 
-    client = PayHub(api_key="pk_live_x:sk_live_y", country="bf", max_retries=0, transport=http)
+    client = BarkaPay(api_key="pk_live_x:sk_live_y", country="bf", max_retries=0, transport=http)
 
     payment = client.payments.create(
         {
@@ -48,7 +48,7 @@ def test_create_payment_builds_signed_country_scoped_request() -> None:
     assert request.url == "https://hub.barkapay.com/bf/v1/payments"
     assert request.headers["Authorization"] == "Bearer pk_live_x:sk_live_y"
     assert request.headers["Accept"] == "application/json"
-    assert request.headers["User-Agent"].startswith("payhub-python/")
+    assert request.headers["User-Agent"].startswith("barkapay-python/")
     assert "X-Request-Id" in request.headers
 
     assert request.body is not None
@@ -58,7 +58,7 @@ def test_create_payment_builds_signed_country_scoped_request() -> None:
 
 def test_country_can_be_overridden_per_call() -> None:
     http = FakeTransport([json_response(200, {"status": "success", "data": {}})])
-    client = PayHub(api_key="k:s", country="bf", max_retries=0, transport=http)
+    client = BarkaPay(api_key="k:s", country="bf", max_retries=0, transport=http)
 
     client.ping("sn")
 
@@ -68,7 +68,7 @@ def test_country_can_be_overridden_per_call() -> None:
 
 def test_keyid_secret_pair_builds_authorization() -> None:
     http = FakeTransport([json_response(200, {"status": "success", "data": {}})])
-    client = PayHub(key_id="k", secret="s", country="bf", max_retries=0, transport=http)
+    client = BarkaPay(key_id="k", secret="s", country="bf", max_retries=0, transport=http)
 
     client.ping()
 
@@ -78,7 +78,7 @@ def test_keyid_secret_pair_builds_authorization() -> None:
 
 def test_accidental_bearer_prefix_is_forgiven() -> None:
     http = FakeTransport([json_response(200, {"status": "success", "data": {}})])
-    client = PayHub(api_key="Bearer k:s", country="bf", max_retries=0, transport=http)
+    client = BarkaPay(api_key="Bearer k:s", country="bf", max_retries=0, transport=http)
 
     client.ping()
 
@@ -109,7 +109,7 @@ def test_list_hydrates_collection_pagination_and_query_string() -> None:
             )
         ]
     )
-    client = PayHub(api_key="k:s", country="bf", max_retries=0, transport=http)
+    client = BarkaPay(api_key="k:s", country="bf", max_retries=0, transport=http)
 
     listing = client.payments.list({"status": "SUCCESSFUL"})
 
@@ -130,7 +130,7 @@ def test_get_payment_returns_first_row() -> None:
             )
         ]
     )
-    client = PayHub(api_key="k:s", country="bf", max_retries=0, transport=http)
+    client = BarkaPay(api_key="k:s", country="bf", max_retries=0, transport=http)
 
     payment = client.payments.get("pay_42")
 
@@ -148,7 +148,7 @@ def test_confirm_otp_posts_otp_body() -> None:
             )
         ]
     )
-    client = PayHub(api_key="k:s", country="bf", max_retries=0, transport=http)
+    client = BarkaPay(api_key="k:s", country="bf", max_retries=0, transport=http)
 
     client.payments.confirm_otp("pay_1", "123456")
 
@@ -177,7 +177,7 @@ def test_balance_get() -> None:
             )
         ]
     )
-    client = PayHub(api_key="k:s", country="bf", max_retries=0, transport=http)
+    client = BarkaPay(api_key="k:s", country="bf", max_retries=0, transport=http)
 
     balance = client.balance.get()
 
@@ -197,7 +197,7 @@ def test_retries_on_503_then_succeeds() -> None:
             json_response(200, {"status": "success", "data": {}}),
         ]
     )
-    client = PayHub(api_key="k:s", country="bf", max_retries=1, transport=http)
+    client = BarkaPay(api_key="k:s", country="bf", max_retries=1, transport=http)
 
     client.ping()
 
@@ -205,10 +205,10 @@ def test_retries_on_503_then_succeeds() -> None:
 
 
 def test_missing_country_raises_configuration_error() -> None:
-    from payhub import ConfigurationError
+    from barkapay import ConfigurationError
 
     http = FakeTransport([json_response(200, {"status": "success", "data": {}})])
-    client = PayHub(api_key="k:s", max_retries=0, transport=http)
+    client = BarkaPay(api_key="k:s", max_retries=0, transport=http)
 
     try:
         client.ping()
@@ -218,10 +218,10 @@ def test_missing_country_raises_configuration_error() -> None:
 
 
 def test_missing_credentials_raises_configuration_error() -> None:
-    from payhub import ConfigurationError
+    from barkapay import ConfigurationError
 
     try:
-        PayHub(country="bf")
+        BarkaPay(country="bf")
         raise AssertionError("expected ConfigurationError")
     except ConfigurationError:
         pass

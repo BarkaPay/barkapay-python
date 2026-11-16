@@ -8,11 +8,11 @@ from __future__ import annotations
 import os
 import sys
 
-import payhub
-from payhub import PayHubError
+import barkapay
+from barkapay import BarkaPayError
 
 
-def main(client: payhub.PayHub) -> payhub.PaymentLink | None:
+def main(client: barkapay.BarkaPay) -> barkapay.PaymentLink | None:
     try:
         link = client.payment_links.create(
             {
@@ -38,10 +38,10 @@ def main(client: payhub.PayHub) -> payhub.PaymentLink | None:
         #   client.payment_links.update(link.public_id, {"title": "New title"})
         #   client.payment_links.cancel(link.public_id)
         return link
-    except PayHubError as exc:
+    except BarkaPayError as exc:
         print(f"barkapay error: {exc}", file=sys.stderr)
         return None
 
 
 if __name__ == "__main__":
-    main(payhub.PayHub(api_key=os.environ["BARKAPAY_API_KEY"], country="bf"))
+    main(barkapay.BarkaPay(api_key=os.environ["BARKAPAY_API_KEY"], country="bf"))

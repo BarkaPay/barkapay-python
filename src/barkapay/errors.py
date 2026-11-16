@@ -1,6 +1,6 @@
 """The exception hierarchy raised by the SDK.
 
-Catch everything from the SDK with :class:`PayHubError`. API errors map the most
+Catch everything from the SDK with :class:`BarkaPayError`. API errors map the most
 common cases to :class:`ApiError` subclasses so you can catch them precisely.
 """
 
@@ -13,11 +13,11 @@ if TYPE_CHECKING:
     from .models import Payment, Transfer
 
 
-class PayHubError(Exception):
+class BarkaPayError(Exception):
     """Base class for every exception the SDK raises."""
 
 
-class ApiError(PayHubError):
+class ApiError(BarkaPayError):
     """Base class for every error returned by the API (any response with the
     standard error envelope or a non-2xx status).
 
@@ -87,7 +87,7 @@ class ApiError(PayHubError):
     @property
     def reason_code(self) -> str | None:
         """Stable failure code of the failed payment / transfer, if any
-        (e.g. ``payer_insufficient_funds``). See :class:`payhub.ReasonCode`."""
+        (e.g. ``payer_insufficient_funds``). See :class:`barkapay.ReasonCode`."""
         for key in ("payment", "transfer"):
             snapshot = self.data.get(key)
             if isinstance(snapshot, dict):
@@ -198,7 +198,7 @@ class ServerError(ApiError):
     """5xx — unexpected server error on barkapay's side."""
 
 
-class NetworkError(PayHubError):
+class NetworkError(BarkaPayError):
     """The HTTP exchange did not complete (DNS, TLS, connection, timeout).
 
     For a request that creates money (payment, transfer) the outcome is then
@@ -216,11 +216,11 @@ class NetworkError(PayHubError):
         self.request_id = request_id
 
 
-class SignatureVerificationError(PayHubError):
+class SignatureVerificationError(BarkaPayError):
     """A webhook signature could not be verified (bad signature, stale, malformed)."""
 
 
-class ConfigurationError(PayHubError, ValueError):
+class ConfigurationError(BarkaPayError, ValueError):
     """The SDK was constructed or called with invalid arguments."""
 
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from payhub import SignatureVerificationError, webhook
+from barkapay import SignatureVerificationError, webhook
 
 # Deliveries are at-least-once: remember the event ids you already processed
 # (use your database or cache in production — this set is only for the demo).

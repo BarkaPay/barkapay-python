@@ -9,14 +9,14 @@ import os
 import sys
 from decimal import Decimal
 
-import payhub
-from payhub import PayHubError
+import barkapay
+from barkapay import BarkaPayError
 
 
-def main(client: payhub.PayHub) -> Decimal | None:
+def main(client: barkapay.BarkaPay) -> Decimal | None:
     try:
         balance = client.balance.get()
-    except PayHubError as exc:
+    except BarkaPayError as exc:
         print(f"barkapay error: {exc}", file=sys.stderr)
         return None
 
@@ -26,4 +26,4 @@ def main(client: payhub.PayHub) -> Decimal | None:
 
 
 if __name__ == "__main__":
-    main(payhub.PayHub(api_key=os.environ["BARKAPAY_API_KEY"], country="bf"))
+    main(barkapay.BarkaPay(api_key=os.environ["BARKAPAY_API_KEY"], country="bf"))

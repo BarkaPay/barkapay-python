@@ -4,23 +4,23 @@
 
 Please **do not** open a public issue for security vulnerabilities.
 
-- Preferred: use GitHub's [private vulnerability reporting](https://github.com/BarkaPay/payhub-python/security/advisories/new).
+- Preferred: use GitHub's [private vulnerability reporting](https://github.com/BarkaPay/barkapay-python/security/advisories/new).
 - Or email **security@payhub.africa** with details and reproduction steps.
 
 We aim to acknowledge reports within 72 hours.
 
 ## Supported versions
 
-The latest released minor version receives security fixes. Upgrade to it
-before reporting an issue: 1.1.0 fixes several weaknesses of 1.0.0 (see the
-"Security" section of the [changelog](CHANGELOG.md)).
+The latest released minor version of `barkapay` (2.0.x) receives security
+fixes. The 1.x releases, published as `barkapay-payhub` (import `payhub`), are
+retired: upgrade to 2.0 — a rename, see the README — before reporting an issue.
 
 ## What the SDK guarantees
 
 - **Transport**: HTTPS only, certificates and host names always verified
   (TLS 1.2 minimum), redirects never followed. There is no switch to disable
   verification; a custom CA bundle goes through
-  `payhub.UrllibTransport(context=...)`, which refuses a non-verifying context.
+  `barkapay.UrllibTransport(context=...)`, which refuses a non-verifying context.
 - **Credentials**: the API key is sent in the `Authorization` header to the
   configured `base_url` only. It never appears in `repr()`, exception messages
   or logs produced by the SDK.
@@ -41,7 +41,7 @@ before reporting an issue: 1.1.0 fixes several weaknesses of 1.0.0 (see the
 - Restrict each API application to the scopes, operators and IP addresses it
   needs.
 - Verify every webhook against the **raw** request body
-  (`payhub.webhook.verify` / `parse`) before trusting it, and deduplicate on
+  (`barkapay.webhook.verify` / `parse`) before trusting it, and deduplicate on
   `event_id`.
 - If you inject your own `transport`, it must verify TLS and must not follow
   redirects.

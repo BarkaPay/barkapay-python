@@ -2,20 +2,20 @@ from __future__ import annotations
 
 import pytest
 
-from payhub import (
+from barkapay import (
     AuthenticationError,
+    BarkaPay,
     ConflictError,
     NetworkError,
-    PayHub,
     RateLimitError,
     ValidationError,
 )
-from payhub.http import Response
+from barkapay.http import Response
 from tests.support import FakeTransport, json_response
 
 
-def _client(response: Response, max_retries: int = 0) -> PayHub:
-    return PayHub(
+def _client(response: Response, max_retries: int = 0) -> BarkaPay:
+    return BarkaPay(
         api_key="k:s",
         country="bf",
         max_retries=max_retries,
@@ -85,7 +85,7 @@ def test_request_id_falls_back_to_generated_when_absent() -> None:
     client = _client(
         json_response(500, {"status": "error", "code": "server_error", "message": "boom"})
     )
-    from payhub import ServerError
+    from barkapay import ServerError
 
     with pytest.raises(ServerError) as exc_info:
         client.ping()
@@ -93,7 +93,7 @@ def test_request_id_falls_back_to_generated_when_absent() -> None:
 
 
 def test_network_error_bubbles_up() -> None:
-    client = PayHub(
+    client = BarkaPay(
         api_key="k:s",
         country="bf",
         max_retries=0,

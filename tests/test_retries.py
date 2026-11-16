@@ -10,15 +10,15 @@ from typing import Any
 
 import pytest
 
-from payhub import (
+from barkapay import (
+    BarkaPay,
     ConfigurationError,
     NetworkError,
-    PayHub,
     RateLimitError,
     ServerError,
     ServiceUnavailableError,
 )
-from payhub.http import Response
+from barkapay.http import Response
 from tests import samples
 from tests.support import FakeTransport, json_response, make_client, ok
 
@@ -27,7 +27,7 @@ THROTTLED = json_response(
     429, {"status": "error", "code": "too_many_requests", "message": "slow down"}
 )
 
-Call = Callable[[PayHub], Any]
+Call = Callable[[BarkaPay], Any]
 
 # Every call that creates or changes something.
 WRITES: dict[str, Call] = {
@@ -297,7 +297,7 @@ def test_backoff_is_exponential_capped_and_jittered() -> None:
 
 
 def test_backoff_uses_real_randomness_by_default() -> None:
-    api = PayHub(api_key="k:s", country="bf", transport=FakeTransport([]))._api
+    api = BarkaPay(api_key="k:s", country="bf", transport=FakeTransport([]))._api
     draws = {api._backoff(3) for _ in range(50)}
     assert all(2.0 <= value <= 4.0 for value in draws)
     assert len(draws) > 1
@@ -305,10 +305,10 @@ def test_backoff_uses_real_randomness_by_default() -> None:
 
 def test_max_retries_is_validated_and_capped() -> None:
     with pytest.raises(ConfigurationError):
-        PayHub(api_key="k:s", country="bf", max_retries="2")  # type: ignore[arg-type]
+        BarkaPay(api_key="k:s", country="bf", max_retries="2")  # type: ignore[arg-type]
 
     def effective(max_retries: int) -> int:
-        client = PayHub(
+        client = BarkaPay(
             api_key="k:s", country="bf", max_retries=max_retries, transport=FakeTransport([])
         )
         return client._api._max_retries
@@ -318,7 +318,7 @@ def test_max_retries_is_validated_and_capped() -> None:
 
 
 def test_retry_after_date_without_a_zone_is_read_as_utc() -> None:
-    from payhub.client import _parse_retry_after
+    from barkapay.client import _parse_retry_after
 
     now = 1_763_280_000.0  # 2025-11-16T08:00:00Z
     assert _parse_retry_after("Sun, 16 Nov 2025 08:00:30 GMT", now) == 30.0
