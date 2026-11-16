@@ -10,10 +10,11 @@ import sys
 import time
 
 import payhub
-from payhub import PayHubError, PaymentFailedError, PaymentStatus
+from payhub import NetworkError, PayHubError, PaymentFailedError, PaymentStatus
 
 
 def main(client: payhub.PayHub) -> payhub.Payment | None:
+    order_id = f"ORDER-{int(time.time())}"
     try:
         # `otp` is only needed for operators that take the payer's code
         # up-front (ORANGE). Others answer AWAITING_OTP (confirm in a second
@@ -27,7 +28,7 @@ def main(client: payhub.PayHub) -> payhub.Payment | None:
                 "otp": "123456",
                 # unique=True: a second create with the same id is refused (409),
                 # so a retry after a network error can never charge twice.
-                "order": {"id": f"ORDER-{int(time.time())}", "unique": True},
+                "order": {"id": order_id, "unique": True},
             }
         )
     except PaymentFailedError as exc:
@@ -35,6 +36,15 @@ def main(client: payhub.PayHub) -> payhub.Payment | None:
         failed = exc.payment
         print(f"Payment refused: {exc} (reason_code={exc.reason_code})", file=sys.stderr)
         return failed
+    except NetworkError as exc:
+        # No answer: the payer MAY have been charged. Never re-send blindly —
+        # check with a list filtered on your order id first.
+        print(f"No answer ({exc}); checking {order_id} before anything else", file=sys.stderr)
+        try:
+            recorded = client.payments.list({"order_id": order_id})
+        except PayHubError:
+            return None  # still unknown: check again later, do not re-send
+        return recorded[0] if len(recorded) else None
     except PayHubError as exc:
         print(f"barkapay error: {exc}", file=sys.stderr)
         return None

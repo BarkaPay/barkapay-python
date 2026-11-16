@@ -258,7 +258,9 @@ if event["type"] == "payment" and event["status"] == "SUCCESSFUL":
 ```
 
 `webhook.verify(...)` returns a `bool` if you prefer not to catch. Both reject
-a delivery older (or newer) than 5 minutes — tune it with `tolerance=`.
+a delivery older (or newer) than 5 minutes — tune it with `tolerance=` (a
+positive number of seconds: 0 or less raises `ConfigurationError`, as does an
+empty secret).
 
 **The raw-body trap.** The signature covers the exact bytes that were sent. If
 your framework parses the JSON and you re-serialise it, the bytes differ and
@@ -399,19 +401,22 @@ except (payhub.NetworkError, payhub.ServerError, payhub.ServiceUnavailableError)
 Only when nothing was recorded is it safe to send the request again. For a
 deliberate new attempt after a recorded failure, use a new `order.id`.
 
-The default timeout is 40 seconds per connection / read (the API answers
-within 30 seconds).
+The default timeout is 40 seconds (the hub itself answers 503 after 30
+seconds, so you receive its verdict rather than an ambiguous local timeout).
+With the built-in transport it bounds the connection and each read: the
+standard library has no whole-request deadline.
 
 ## Rate limits
 
 Requests are throttled per merchant and per route family (payments and
 payment links, transfer creation, transfer reads). Over the limit, the API
 answers **429** with a `Retry-After` header: the SDK waits that long and
-retries, up to `max_retries` times — when the wait is at most 60 seconds for
-a read, 10 seconds for a write. Beyond that it raises `RateLimitError` with
-`.retry_after` and lets you decide. The limits are not published — read
+retries, up to `max_retries` times — when the wait is at most 10 seconds.
+Beyond that it raises `RateLimitError` with `.retry_after` and lets you
+decide. The limits are not published — read
 them at run time: authenticated responses carry `x-ratelimit-limit` and
-`x-ratelimit-remaining`. On errors they are in `error.headers`; a transport
+`x-ratelimit-remaining`. On errors they are in `error.headers`
+(`error.headers["x-ratelimit-remaining"]`), next to `error.request_id`; a transport
 wrapper sees them on every response:
 
 ```python
@@ -470,7 +475,12 @@ A client holds no per-request state: create one and share it between threads.
   turn that off. A custom CA bundle goes through
   `payhub.UrllibTransport(context=...)`, which refuses a non-verifying context.
 - With the built-in transport only `https://` base URLs are accepted
-  (`http://` for `localhost` only).
+  (`http://` for `localhost`, `127.0.0.1` and `::1` only). A custom transport
+  may reach a plain-http mock, never a barkapay host.
+- Identifiers are validated before reaching the URL: an empty id, `.`, `..`,
+  or one containing `/`, `?`, `#` or a control character is refused before
+  any request; a country code is two letters.
+- A response body larger than 10 MiB is refused (`NetworkError`).
 - Redirects are never followed, so the API key cannot be forwarded to another
   host.
 - The API key never appears in `repr()`, exceptions or logs produced by the SDK.
