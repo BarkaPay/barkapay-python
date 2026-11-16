@@ -38,7 +38,7 @@ payment = client.payments.create(
         "operator": "ORANGE",
         "phone_number": "74123456",
         "amount": 10000,
-        "otp": "123456",  # only for operators that take the payer's code up-front
+        "otp": "123456",  # ORANGE takes the payer's code up-front; other operators do not
         "order": {"id": "ORDER-2026-001"},
     }
 )
@@ -77,8 +77,13 @@ What `create` returns depends on the operator — **always branch on `status`**:
 | `AWAITING_OTP` | The payer received a code (two-step operators) | `confirm_otp(public_id, code)` |
 | `PROCESSING_OPERATOR` | The payer must approve on their phone | Wait for the webhook; open `redirect_url` when set |
 
-`client.operators.info()` tells, per operator, whether an OTP is required and
-the amount bounds.
+`client.operators.info()` lists the operators of a country with their amount
+bounds and whether they work with an OTP (`otp_required`): sent up-front in
+`otp` for ORANGE (Burkina Faso, Sénégal), confirmed in a second step with
+`confirm_otp` for MOOV (Burkina Faso).
+
+The object returned by `create` is a short snapshot (no `channel`,
+`created_at` or `order_data` yet); `get()` returns the full payment.
 
 A payment that the payer or the operator **refuses** is not returned: it is
 raised as `PaymentFailedError`, with the `FAILED` payment attached.

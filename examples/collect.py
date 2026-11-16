@@ -16,9 +16,9 @@ from payhub import PayHubError, PaymentFailedError, PaymentStatus
 def main(client: payhub.PayHub) -> payhub.Payment | None:
     try:
         # `otp` is only needed for operators that take the payer's code
-        # up-front (client.operators.info() tells which ones). Others answer
-        # AWAITING_OTP (confirm in a second call) or PROCESSING_OPERATOR (the
-        # verdict arrives by webhook). Always branch on the returned status.
+        # up-front (ORANGE). Others answer AWAITING_OTP (confirm in a second
+        # call) or PROCESSING_OPERATOR (the verdict arrives by webhook).
+        # Always branch on the returned status.
         payment = client.payments.create(
             {
                 "operator": "ORANGE",
