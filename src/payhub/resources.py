@@ -33,14 +33,16 @@ class Payments:
     def create(self, params: Mapping[str, Any], country: str | None = None) -> Payment:
         """Create a payment (collect money from a payer).
 
-        ``params``: ``operator``, ``phone_number``, ``amount``,
-        ``order`` (``{"id": …, "unique": bool, "data": {…}}``) and ``otp`` for
-        operators that take the payer's code up-front (``operators.info()``
-        tells which ones).
+        ``params``: ``operator`` (upper case, e.g. ``"ORANGE"``),
+        ``phone_number`` (national format, no country prefix), ``amount``,
+        ``order`` (``{"id": …, "unique": bool, "data": {…}}``) and ``otp``
+        (a 6-digit string) for operators that take the payer's code up-front
+        (ORANGE in Burkina Faso and Sénégal).
 
         Branch on the returned ``status``: ``SUCCESSFUL`` (settled),
         ``AWAITING_OTP`` (call :meth:`confirm_otp`) or ``PROCESSING_OPERATOR``
-        (the verdict comes by webhook; open ``redirect_url`` when set).
+        (the verdict comes by webhook; open ``redirect_url`` when set). The
+        returned object is a short snapshot — :meth:`get` gives the full one.
 
         A refusal is raised as :class:`~payhub.errors.PaymentFailedError`
         (HTTP 424) carrying the ``FAILED`` payment in ``.payment``.
@@ -229,8 +231,8 @@ class Transfers:
     def create(self, params: Mapping[str, Any], country: str | None = None) -> Transfer:
         """Create a transfer (send money to a recipient).
 
-        ``params``: ``operator``, ``phone_number``, ``amount``,
-        ``order`` (``{"id": …, "unique": bool, "data": {…}}``),
+        ``params``: ``operator`` (upper case), ``phone_number`` (national
+        format), ``amount``, ``order`` (``{"id": …, "unique": bool, "data": {…}}``),
         ``ignore_double_spend_risk`` (bypass the 60 s duplicate guard).
 
         A status of ``UNCERTAIN`` means the operator did not answer clearly:
