@@ -45,6 +45,7 @@ before reporting an issue: 1.1.0 fixes several weaknesses of 1.0.0 (see the
   `event_id`.
 - If you inject your own `transport`, it must verify TLS and must not follow
   redirects.
-- After a `NetworkError` or a 5xx on a create call, look the operation up by
-  your `order.id` before sending it again (see "Retries, timeouts and
-  idempotency" in the README).
+- Send `order.unique: true` on every payment and transfer, and after a
+  `NetworkError` or a 5xx on a create call, check with a list filtered on your
+  `order.id` before sending it again (see "Retries, timeouts and idempotency"
+  in the README).

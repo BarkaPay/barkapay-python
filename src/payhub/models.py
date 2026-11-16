@@ -4,13 +4,14 @@ Documented fields are typed; every object keeps the full payload in ``raw`` for
 forward-compatibility, so a field the API adds tomorrow is never lost.
 
 Money: the API returns mobile-money ``amount`` as a JSON number and ``fees`` /
-balances as decimal strings. The attributes keep the API value untouched; the
-``*_decimal`` properties give an exact :class:`~decimal.Decimal` for arithmetic.
+balances as decimal strings. ``amount`` keeps the API value untouched; a
+decimal-string field that arrives as a bare number is rendered as its plain
+decimal string. The ``*_decimal`` properties give an exact
+:class:`~decimal.Decimal` for arithmetic.
 """
 
 from __future__ import annotations
 
-import math
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -377,7 +378,7 @@ class Pagination:
             return self.last_page
         if self.total is None or self.per_page is None or self.per_page <= 0:
             return None
-        return max(1, math.ceil(self.total / self.per_page))
+        return max(1, -(-self.total // self.per_page))  # integer ceiling
 
     @property
     def next_page(self) -> int | None:

@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-from ._util import as_dict, as_list_of_dict, path_segment
-from .errors import ApiError, ConfigurationError, NotFoundError
+from ._util import as_dict, path_segment
+from .errors import ConfigurationError, NotFoundError
 from .models import (
     Balance,
     Pagination,
@@ -21,7 +21,7 @@ from .models import (
 )
 
 if TYPE_CHECKING:
-    from .client import _ApiClient
+    from .client import _ApiClient, _ApiResult
 
 
 class Payments:
@@ -47,15 +47,16 @@ class Payments:
         A refusal is raised as :class:`~payhub.errors.PaymentFailedError`
         (HTTP 424) carrying the ``FAILED`` payment in ``.payment``.
 
-        This call is never retried automatically after a network error or a
-        5xx. To make your own retry safe, send ``order.unique: true``: a
-        second create with the same ``order.id`` is refused with a 409.
+        This call is never retried automatically after a timeout, a network
+        error or a 5xx. To make your own retry safe, send
+        ``order.unique: true`` (a second create with the same ``order.id`` is
+        refused with a 409) and check with ``list({"order_id": …})`` first.
 
         To let the payer choose the operator on a hosted page instead, create
         a payment link: ``client.payment_links.create(...)``.
         """
-        env = self._api.request("POST", "payments", country=country, body=params)
-        return Payment.from_dict(_resource(env, "payment"))
+        result = self._api.request("POST", "payments", country=country, body=params)
+        return Payment.from_dict(result.resource("payment"))
 
     def list(
         self,
@@ -68,8 +69,10 @@ class Payments:
         ``channel`` (``api`` / ``hosted``), ``from_date`` + ``to_date``,
         ``amount`` + ``amount_operator``, ``per_page`` (max 200), ``page``.
         """
-        env = self._api.request("GET", "payments", country=country, query=filters)
-        return _payment_list(env)
+        result = self._api.request("GET", "payments", country=country, query=filters)
+        return PaymentList(
+            [Payment.from_dict(row) for row in result.rows("payments")], _pagination(result)
+        )
 
     def get(self, id: str, country: str | None = None) -> Payment:
         """Look up a payment by its ``public_id`` (UUID) or by your ``order.id``.
@@ -80,8 +83,13 @@ class Payments:
         that contains a ``/``, which cannot be looked up by path.
         """
         segment = path_segment(id)
-        env = self._api.request("GET", f"payments/{segment}", country=country)
-        rows = _rows(env, "payments")
+        if segment == "links":
+            # GET /payments/links is the payment-links list, not a lookup.
+            raise ConfigurationError(
+                '"links" cannot be looked up by path: use payments.list({"order_id": "links"}).'
+            )
+        result = self._api.request("GET", f"payments/{segment}", country=country)
+        rows = result.rows("payments")
         if rows:
             return Payment.from_dict(rows[0])
         raise NotFoundError(f'No payment found for "{id}".', "resource_not_found", 404)
@@ -94,13 +102,13 @@ class Payments:
         A refused code raises :class:`~payhub.errors.PaymentFailedError`.
         """
         segment = path_segment(public_id, "public_id")
-        env = self._api.request(
+        result = self._api.request(
             "POST",
             f"payments/{segment}/confirm-otp",
             country=country,
             body={"otp": _otp(otp)},
         )
-        return Payment.from_dict(_resource(env, "payment"))
+        return Payment.from_dict(result.resource("payment"))
 
     def resend_otp(self, public_id: str, country: str | None = None) -> None:
         """Send the OTP again to the payer of an ``AWAITING_OTP`` payment."""
@@ -109,6 +117,7 @@ class Payments:
             "POST",
             f"payments/{segment}/resend-otp",
             country=country,
+            allow_empty=True,
         )
 
 
@@ -134,8 +143,8 @@ class PaymentLinks:
         ``restrictions`` (``countries`` / ``operators``), ``payer``,
         ``collect``, ``notify_email_invoice``, ``expires_at``.
         """
-        env = self._api.request("POST", "payments/links", country=country, body=params)
-        return PaymentLink.from_dict(_resource(env, "payment_link"))
+        result = self._api.request("POST", "payments/links", country=country, body=params)
+        return PaymentLink.from_dict(result.resource("payment_link"))
 
     def list(
         self,
@@ -147,15 +156,15 @@ class PaymentLinks:
         ``params``: ``status`` (one value, or several: ``["active", "paid"]``),
         ``usage``, ``source`` (``api`` / ``ui``), ``per_page`` (max 100), ``page``.
         """
-        env = self._api.request("GET", "payments/links", country=country, query=params)
-        rows = _rows(env, "payment_links")
-        return PaymentLinkList([PaymentLink.from_dict(row) for row in rows], _pagination(env))
+        result = self._api.request("GET", "payments/links", country=country, query=params)
+        rows = result.rows("payment_links")
+        return PaymentLinkList([PaymentLink.from_dict(row) for row in rows], _pagination(result))
 
     def get(self, id: str, country: str | None = None) -> PaymentLink:
         """Retrieve a payment link by ``public_id`` (``PL-…``) or slug."""
         segment = path_segment(id)
-        env = self._api.request("GET", f"payments/links/{segment}", country=country)
-        return PaymentLink.from_dict(_resource(env, "payment_link"))
+        result = self._api.request("GET", f"payments/links/{segment}", country=country)
+        return PaymentLink.from_dict(result.resource("payment_link"))
 
     def update(
         self,
@@ -170,14 +179,16 @@ class PaymentLinks:
         are immutable.
         """
         segment = path_segment(id)
-        env = self._api.request("PATCH", f"payments/links/{segment}", country=country, body=params)
-        return PaymentLink.from_dict(_resource(env, "payment_link"))
+        result = self._api.request(
+            "PATCH", f"payments/links/{segment}", country=country, body=params
+        )
+        return PaymentLink.from_dict(result.resource("payment_link"))
 
     def cancel(self, id: str, country: str | None = None) -> PaymentLink:
         """Cancel a link for good (active or paused → ``canceled``)."""
         segment = path_segment(id)
-        env = self._api.request("DELETE", f"payments/links/{segment}", country=country)
-        return PaymentLink.from_dict(_resource(env, "payment_link"))
+        result = self._api.request("DELETE", f"payments/links/{segment}", country=country)
+        return PaymentLink.from_dict(result.resource("payment_link"))
 
     def pause(self, id: str, country: str | None = None) -> PaymentLink:
         """Pause an active link: the checkout refuses new payments at once.
@@ -185,8 +196,8 @@ class PaymentLinks:
         A link that is not active is returned unchanged — check ``status``.
         """
         segment = path_segment(id)
-        env = self._api.request("POST", f"payments/links/{segment}/pause", country=country)
-        return PaymentLink.from_dict(_resource(env, "payment_link"))
+        result = self._api.request("POST", f"payments/links/{segment}/pause", country=country)
+        return PaymentLink.from_dict(result.resource("payment_link"))
 
     def resume(self, id: str, country: str | None = None) -> PaymentLink:
         """Resume a paused link.
@@ -194,8 +205,8 @@ class PaymentLinks:
         A link that is not paused is returned unchanged — check ``status``.
         """
         segment = path_segment(id)
-        env = self._api.request("POST", f"payments/links/{segment}/resume", country=country)
-        return PaymentLink.from_dict(_resource(env, "payment_link"))
+        result = self._api.request("POST", f"payments/links/{segment}/resume", country=country)
+        return PaymentLink.from_dict(result.resource("payment_link"))
 
     def list_payments(
         self,
@@ -210,14 +221,14 @@ class PaymentLinks:
         ``to_date``, ``per_page`` (max 100), ``page``.
         """
         segment = path_segment(id)
-        env = self._api.request(
+        result = self._api.request(
             "GET", f"payments/links/{segment}/payments", country=country, query=params
         )
-        rows = _rows(env, "payments")
-        summary = as_dict(as_dict(env, "data") or {}, "payment_link")
+        rows = result.rows("payments")
+        summary = as_dict(result.data or {}, "payment_link")
         return PaymentLinkPaymentList(
             [Payment.from_dict(row) for row in rows],
-            _pagination(env),
+            _pagination(result),
             PaymentLinkSummary.from_dict(summary) if summary is not None else None,
         )
 
@@ -240,13 +251,13 @@ class Transfers:
         ``transfer.*`` webhook carries the verdict. A definitive refusal is
         raised as :class:`~payhub.errors.TransferFailedError` (HTTP 424).
 
-        This call is never retried automatically after a network error or a
-        5xx. After such an error the outcome is unknown: look the transfer up
-        (``get(order_id)``) before sending again, and prefer
-        ``order.unique: true`` so a duplicate is refused with a 409.
+        This call is never retried automatically after a timeout, a network
+        error or a 5xx. After such an error the outcome is unknown: send
+        ``order.unique: true`` (a duplicate is then refused with a 409) and
+        check with ``list({"order_id": …})`` before sending again.
         """
-        env = self._api.request("POST", "transfers", country=country, body=params)
-        return Transfer.from_dict(_resource(env, "transfer"))
+        result = self._api.request("POST", "transfers", country=country, body=params)
+        return Transfer.from_dict(result.resource("transfer"))
 
     def list(
         self,
@@ -259,8 +270,10 @@ class Transfers:
         ``from_date`` + ``to_date``, ``amount`` + ``amount_operator``,
         ``per_page`` (max 200), ``page``.
         """
-        env = self._api.request("GET", "transfers", country=country, query=filters)
-        return _transfer_list(env)
+        result = self._api.request("GET", "transfers", country=country, query=filters)
+        return TransferList(
+            [Transfer.from_dict(row) for row in result.rows("transfers")], _pagination(result)
+        )
 
     def get(self, id: str, country: str | None = None) -> Transfer:
         """Look up a transfer by its ``public_id`` (UUID) or by your ``order.id``.
@@ -271,8 +284,8 @@ class Transfers:
         that contains a ``/``, which cannot be looked up by path.
         """
         segment = path_segment(id)
-        env = self._api.request("GET", f"transfers/{segment}", country=country)
-        rows = _rows(env, "transfers")
+        result = self._api.request("GET", f"transfers/{segment}", country=country)
+        rows = result.rows("transfers")
         if rows:
             return Transfer.from_dict(rows[0])
         raise NotFoundError(f'No transfer found for "{id}".', "resource_not_found", 404)
@@ -286,10 +299,10 @@ class BalanceResource:
 
     def get(self, country: str | None = None) -> Balance:
         """The merchant's wallet balance for the country."""
-        env = self._api.request("GET", "balance", country=country)
-        data = as_dict(env, "data")
+        result = self._api.request("GET", "balance", country=country)
+        data = result.data
         if data is None:
-            raise _unexpected(env, "`data` is missing")
+            raise result.unexpected("`data` is missing")
         return Balance.from_dict(data)
 
 
@@ -305,8 +318,7 @@ class Operators:
         ``{"operational": bool, "services": {country: {operator: {"payment":
         {"status", "reason", "updated_at"}, "transfer": {…}}}}}``
         """
-        env = self._api.request("GET", "operators/availability", country=country)
-        return as_dict(env, "data") or {}
+        return self._api.request("GET", "operators/availability", country=country).data or {}
 
     def info(self, country: str | None = None) -> dict[str, Any]:
         """Operator capabilities (OTP requirement, amount bounds, instructions).
@@ -315,8 +327,7 @@ class Operators:
         ``{"operators": {country: {operator: {"otp_required", "min_amount",
         "max_amount", "pay_delay", "payment_instructions"}}}, "supported_countries": […]}``
         """
-        env = self._api.request("GET", "operators/info", country=country)
-        return as_dict(env, "data") or {}
+        return self._api.request("GET", "operators/info", country=country).data or {}
 
 
 def _otp(otp: object) -> str:
@@ -330,45 +341,6 @@ def _otp(otp: object) -> str:
     return code
 
 
-def _unexpected(envelope: Mapping[str, Any], what: str) -> ApiError:
-    """A 2xx answer that does not carry what the endpoint must return."""
-    raw_request_id = envelope.get("request_id")
-    return ApiError(
-        f"Unexpected response from the API: {what}.",
-        "invalid_response",
-        200,
-        raw_request_id if isinstance(raw_request_id, str) else None,
-        data=as_dict(envelope, "data"),
-    )
-
-
-def _resource(envelope: Mapping[str, Any], key: str) -> dict[str, Any]:
-    """The object a successful call must return — never an empty stand-in."""
-    resource = as_dict(as_dict(envelope, "data") or {}, key)
-    if resource is None:
-        raise _unexpected(envelope, f"`data.{key}` is missing")
-    return resource
-
-
-def _rows(envelope: Mapping[str, Any], key: str) -> list[dict[str, Any]]:
-    """The list a successful call must return — a malformed answer is never
-    passed off as "no result"."""
-    rows = as_list_of_dict(as_dict(envelope, "data") or {}, key)
-    if rows is None:
-        raise _unexpected(envelope, f"`data.{key}` is missing")
-    return rows
-
-
-def _pagination(envelope: Mapping[str, Any]) -> Pagination | None:
-    meta = as_dict(envelope, "meta")
+def _pagination(result: _ApiResult) -> Pagination | None:
+    meta = as_dict(result.envelope, "meta")
     return Pagination.from_dict(meta) if meta is not None else None
-
-
-def _payment_list(envelope: Mapping[str, Any]) -> PaymentList:
-    rows = _rows(envelope, "payments")
-    return PaymentList([Payment.from_dict(row) for row in rows], _pagination(envelope))
-
-
-def _transfer_list(envelope: Mapping[str, Any]) -> TransferList:
-    rows = _rows(envelope, "transfers")
-    return TransferList([Transfer.from_dict(row) for row in rows], _pagination(envelope))

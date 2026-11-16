@@ -8,22 +8,27 @@ All notable changes to this project are documented here. The format is based on
 
 ## [1.1.0] - 2026-11-16
 
-Backward compatible with 1.0.0: no public name was removed or renamed, and
-every 1.0.0 call keeps its signature.
+No public name was removed or renamed and every 1.0.0 call keeps its
+signature. Several behaviours are deliberately stricter or safer — read
+"Behaviour changes to check when upgrading" below.
 
 ### Security
 
 - **A request that creates or changes something is never replayed
-  automatically after a 5xx or a network error.** 1.0.0 re-sent `POST`
-  requests (payments, transfers, OTP confirmation) on 503 and on timeouts,
-  which could execute the same payout or charge twice. Retries now apply only
-  to requests answered 429 (not executed) and to read-only requests (502,
-  503, 504 or a network error).
+  automatically after a timeout, a network error or a 5xx.** 1.0.0 re-sent
+  `POST` requests (payments, transfers, OTP confirmation) on 503 and on
+  timeouts, which could execute the same payout or charge twice — the API has
+  no idempotency key. A write is now re-sent in one case only: the API's rate
+  limiter refused it (429 `too_many_requests`, no recorded operation in the
+  answer) and asks to wait 10 seconds at most. Read-only requests are retried
+  on 429, 502, 503, 504 and network errors.
 - **Redirects are never followed.** urllib used to follow them and forward the
   `Authorization` header to the redirect target, including another host.
-- **HTTPS only.** `base_url` must be `https://` (`http://` is accepted for
-  `localhost` only); `file:`, `ftp:`, `data:` and URLs with embedded
-  credentials are refused, as are URLs handed to `UrllibTransport`.
+- **HTTPS only.** With the built-in transport `base_url` must be `https://`
+  (`http://` is accepted for `localhost` only). `file:`, `ftp:`, `data:`,
+  URLs with embedded credentials, a query string or non-ASCII characters are
+  always refused. (A custom `transport=` owns its connection and may still be
+  pointed at a plain-http mock.)
 - **TLS verification cannot be weakened by accident.** The transport builds its
   own verifying context (TLS 1.2 minimum), unaffected by a process-wide
   `ssl._create_default_https_context` override; `UrllibTransport(context=…)`
@@ -42,8 +47,11 @@ every 1.0.0 call keeps its signature.
   secret and a negative `tolerance` raise `ConfigurationError` instead of
   silently accepting forged or replayed deliveries.
 - A 2xx response whose body is not the JSON envelope, or lacks the expected
-  object, raises `ApiError` (`code="invalid_response"`) instead of returning
-  an empty `Payment` / `Transfer`.
+  object or list, raises `ApiError` (`code="invalid_response"`) instead of
+  returning an empty `Payment` / `Transfer` or an empty page. It means
+  "accepted but unreadable", not "refused".
+- The API key is no longer present in the local variables of a traceback
+  raised while building a request.
 - Truncated and oversized (> 10 MiB) responses raise `NetworkError`.
 
 ### Added
@@ -86,6 +94,30 @@ every 1.0.0 call keeps its signature.
   (`"SUCCESSFUL"`) on every Python version (3.11 changed the default).
 - Documentation and messages use the brand name "barkapay". The distribution
   (`barkapay-payhub`) and import (`payhub`) names are unchanged.
+
+### Behaviour changes to check when upgrading
+
+- Automatic retries: writes are no longer re-sent after 503 / timeouts (see
+  Security). If you relied on that, handle `ServiceUnavailableError` and
+  `NetworkError` yourself — after checking that the operation was not
+  recorded.
+- A 429 whose `Retry-After` is short is waited for (reads: up to 60 s, writes:
+  up to 10 s) instead of being retried within a second; a longer one raises
+  `RateLimitError` immediately.
+- `ConfigurationError` is now raised at construction or before sending for:
+  a `base_url` that is not https (built-in transport), an `api_key` without
+  the `key_id:` part, an invalid country code, an empty or malformed id,
+  `timeout` that is not a positive finite number, `max_retries` that is not
+  an `int` (values above 10 are capped), params that cannot be encoded as
+  JSON (was `TypeError`).
+- Redirects are returned as `ApiError` (HTTP 3xx) instead of being followed.
+- The built-in transport ignores an opener installed with
+  `urllib.request.install_opener()`; environment proxies still apply.
+- `webhook.verify` / `parse`: an empty secret, a negative or non-finite
+  `tolerance` and a parsed (non-raw) payload raise `ConfigurationError`.
+- `str(PaymentStatus.SUCCESSFUL)` is `"SUCCESSFUL"` (was
+  `"PaymentStatus.SUCCESSFUL"`).
+- `EXPIRED` payments now have `status=PaymentStatus.EXPIRED` (was `None`).
 
 ### Fixed
 

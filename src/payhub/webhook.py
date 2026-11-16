@@ -27,7 +27,7 @@ SIGNATURE_HEADER = "Barkapay-Signature"
 #: Default replay window, in seconds.
 DEFAULT_TOLERANCE = 300
 
-_Payload = Union[str, bytes, bytearray, memoryview]
+_Payload = Union[str, bytes, bytearray, memoryview, None]
 _Secret = Union[str, bytes]
 
 _MAX_HEADER_LENGTH = 4096
@@ -45,7 +45,8 @@ def verify(
 ) -> bool:
     """Return ``True`` if the signature is valid, ``False`` otherwise.
 
-    :param payload: the RAW request body (``bytes`` preferred, or ``str``).
+    :param payload: the RAW request body (``bytes`` preferred, or ``str``;
+        ``None`` is read as an empty body).
     :param signature_header: the ``Barkapay-Signature`` header value
         (``None`` / empty when the header is missing → ``False``).
     :param secret: your endpoint signing secret (``whsec_…``).
@@ -88,15 +89,14 @@ def _secret_key(secret: object) -> bytes:
     # A configuration mistake must be loud, not a silent "False": an empty
     # secret would make every signature forgeable.
     if isinstance(secret, (bytes, bytearray)):
-        key = bytes(secret)
+        key = bytes(secret)  # binary key: used exactly as given
     elif isinstance(secret, str):
-        key = secret.encode("utf-8")
+        # Stray whitespace (a trailing newline from a secrets file) is not
+        # part of a whsec_… secret.
+        key = secret.strip().encode("utf-8")
     else:
         raise ConfigurationError("The webhook signing secret must be a string.")
-    # Stray whitespace (a trailing newline from a secrets file) is not part
-    # of the secret.
-    key = key.strip()
-    if key == b"":
+    if key.strip() == b"":
         raise ConfigurationError(
             "The webhook signing secret is empty: refusing to verify. "
             "Set the whsec_… secret of your endpoint."
@@ -105,8 +105,16 @@ def _secret_key(secret: object) -> bytes:
 
 
 def _raw_body(payload: object) -> bytes:
+    if payload is None:
+        return b""  # a request without a body (it cannot carry a valid signature)
     if isinstance(payload, str):
-        return payload.encode("utf-8")
+        try:
+            return payload.encode("utf-8")
+        except UnicodeEncodeError:
+            # Lone surrogates: the text is not what was sent on the wire.
+            raise SignatureVerificationError(
+                "The webhook payload is not valid text; pass the raw request bytes."
+            ) from None
     if isinstance(payload, (bytes, bytearray, memoryview)):
         return bytes(payload)
     # A parsed body (dict) can never match the signature: a programming
@@ -127,13 +135,14 @@ def _assert(payload: _Payload, header: str | None, secret: _Secret, tolerance: f
         # NaN and infinity would silently switch the replay window off.
         raise ConfigurationError("`tolerance` must be a finite number of seconds >= 0.")
 
-    raw = _raw_body(payload)
-
+    # The header first: an unsigned request is "invalid signature", whatever
+    # its body looks like.
     parsed = _parse_header(header)
     if parsed is None:
         raise SignatureVerificationError(f"Malformed or missing {SIGNATURE_HEADER} header.")
 
     timestamp, signatures = parsed
+    raw = _raw_body(payload)
 
     if tolerance > 0 and abs(time.time() - timestamp) > tolerance:
         raise SignatureVerificationError("Webhook timestamp is outside the tolerance window.")
@@ -169,7 +178,10 @@ def _parse_header(header: object) -> tuple[int, list[str]] | None:
     signatures: list[str] = []
 
     for part in header.split(","):
-        key, separator, value = part.strip().partition("=")
+        part = part.strip()
+        if part == "":
+            continue  # tolerate a stray comma
+        key, separator, value = part.partition("=")
         if separator == "":
             return None
         if key == "t":
