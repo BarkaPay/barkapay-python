@@ -15,6 +15,7 @@ import pytest
 from payhub import (
     ApiError,
     ConfigurationError,
+    NetworkError,
     Pagination,
     PayHub,
     Payment,
@@ -115,8 +116,8 @@ def test_a_write_is_resent_after_a_short_rate_limit_wait(name: str) -> None:
     assert len(sleeps) == 1 and 4.0 <= sleeps[0] <= 4.25
 
 
-def test_the_write_cap_is_ten_seconds_and_the_read_cap_sixty() -> None:
-    for wait, write_sends, read_sends in ((10, 2, 2), (11, 1, 2), (60, 1, 2), (61, 1, 1)):
+def test_retry_after_is_slept_through_up_to_ten_seconds_for_reads_and_writes() -> None:
+    for wait, write_sends, read_sends in ((10, 2, 2), (11, 1, 1), (60, 1, 1)):
         throttled = json_response(429, THROTTLE_BODY, {"Retry-After": str(wait)})
 
         client, transport, _ = make_client([throttled, SUCCESS], max_retries=1)
@@ -223,6 +224,47 @@ def test_plain_http_is_for_custom_transports_only() -> None:
     # …the built-in one never sends the key in clear text over the network.
     with pytest.raises(ConfigurationError):
         PayHub(api_key=KEY, country="bf", base_url="http://mock-api:8080")
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "http://hub.barkapay.com",
+        "HTTP://Hub.BarkaPay.com/",
+        "http://barkapay.com",
+        "http://hub.barkapay.com.",
+    ],
+)
+@pytest.mark.parametrize("custom_transport", [False, True])
+def test_plain_http_never_reaches_a_barkapay_host(base_url: str, custom_transport: bool) -> None:
+    transport = FakeTransport([]) if custom_transport else None
+    with pytest.raises(ConfigurationError):
+        PayHub(api_key=KEY, country="bf", base_url=base_url, transport=transport)
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda c: c.ping(),
+        lambda c: c.me(),
+        lambda c: c.balance.get(),
+        lambda c: c.operators.info(),
+        lambda c: c.operators.availability(),
+    ],
+)
+def test_a_success_envelope_without_data_is_an_error_not_an_empty_dict(call: Any) -> None:
+    client, _, _ = make_client([json_response(200, {"status": "success", "code": "success"})])
+    with pytest.raises(ApiError) as exc_info:
+        call(client)
+    assert exc_info.value.code == "invalid_response"
+
+
+def test_a_network_error_carries_the_request_id_that_was_sent() -> None:
+    client, transport, _ = make_client([NetworkError("connection reset")])
+    with pytest.raises(NetworkError) as exc_info:
+        client.transfers.create({"operator": "ORANGE"})
+    sent = transport.requests[0].headers["X-Request-Id"]
+    assert exc_info.value.request_id == sent
 
 
 @pytest.mark.parametrize(

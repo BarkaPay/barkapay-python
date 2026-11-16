@@ -100,11 +100,10 @@ def test_tolerance_is_configurable() -> None:
     assert webhook.verify(BODY, old, SECRET) is False
     assert webhook.verify(BODY, old, SECRET, tolerance=600) is True
     assert webhook.verify(BODY, old, SECRET, tolerance=600.5) is True
-    assert webhook.verify(BODY, old, SECRET, tolerance=0) is True  # explicit opt-out
 
 
 @pytest.mark.parametrize(
-    "tolerance", [-1, -0.5, True, "300", None, float("nan"), float("inf"), float("-inf")]
+    "tolerance", [0, 0.0, -1, -0.5, True, "300", None, float("nan"), float("inf"), float("-inf")]
 )
 def test_an_invalid_tolerance_never_silently_disables_the_replay_window(tolerance: object) -> None:
     old = _header(timestamp=int(time.time()) - 100_000)
@@ -224,5 +223,6 @@ def test_signature_matches_the_dispatcher_algorithm() -> None:
     body = b'{"type":"payment","status":"SUCCESSFUL"}'
     signature = hmac.new(b"whsec_vector", b"1763280000." + body, hashlib.sha256).hexdigest()
     header = f"t=1763280000,v1={signature}"
-    assert webhook.verify(body, header, "whsec_vector", tolerance=0) is True
-    assert webhook.parse(body, header, "whsec_vector", tolerance=0)["status"] == "SUCCESSFUL"
+    window = time.time() - 1763280000 + 60
+    assert webhook.verify(body, header, "whsec_vector", tolerance=window) is True
+    assert webhook.parse(body, header, "whsec_vector", tolerance=window)["status"] == "SUCCESSFUL"

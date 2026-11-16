@@ -51,10 +51,10 @@ def verify(
         (``None`` / empty when the header is missing → ``False``).
     :param secret: your endpoint signing secret (``whsec_…``).
     :param tolerance: replay window in seconds — a delivery whose timestamp
-        is further than this from now is rejected. ``0`` disables the check
-        (not recommended).
+        is further than this from now is rejected. Must be positive (default
+        300).
     :raises ConfigurationError: if ``secret`` is empty, ``tolerance`` is
-        negative or ``payload`` is not the raw body — integration mistakes,
+        not positive or ``payload`` is not the raw body — integration mistakes,
         never reported as a plain ``False``.
     """
     try:
@@ -75,7 +75,7 @@ def parse(
     :raises SignatureVerificationError: if the signature is missing, invalid
         or stale, or if the body is not a JSON object.
     :raises ConfigurationError: if ``secret`` is empty, ``tolerance`` is
-        negative or ``payload`` is not the raw body.
+        not positive or ``payload`` is not the raw body.
     """
     _assert(payload, signature_header, secret, tolerance)
 
@@ -130,10 +130,12 @@ def _assert(payload: _Payload, header: str | None, secret: _Secret, tolerance: f
         isinstance(tolerance, bool)
         or not isinstance(tolerance, (int, float))
         or not math.isfinite(tolerance)
-        or tolerance < 0
+        or tolerance <= 0
     ):
-        # NaN and infinity would silently switch the replay window off.
-        raise ConfigurationError("`tolerance` must be a finite number of seconds >= 0.")
+        # 0, a negative value, NaN or infinity would switch the replay window off.
+        raise ConfigurationError(
+            "`tolerance` must be a positive, finite number of seconds (default 300)."
+        )
 
     # The header first: an unsigned request is "invalid signature", whatever
     # its body looks like.
@@ -144,7 +146,7 @@ def _assert(payload: _Payload, header: str | None, secret: _Secret, tolerance: f
     timestamp, signatures = parsed
     raw = _raw_body(payload)
 
-    if tolerance > 0 and abs(time.time() - timestamp) > tolerance:
+    if abs(time.time() - timestamp) > tolerance:
         raise SignatureVerificationError("Webhook timestamp is outside the tolerance window.")
 
     message = str(timestamp).encode("ascii") + b"." + raw

@@ -17,7 +17,7 @@ from urllib.parse import quote
 
 from .errors import ConfigurationError
 
-_COUNTRY_RE = re.compile(r"[a-z]{2,3}")
+_COUNTRY_RE = re.compile(r"[a-z]{2}")
 _MAX_SEGMENT_LENGTH = 255
 
 
@@ -192,7 +192,7 @@ def normalize_country(country: object) -> str:
     code = country.strip().lower()
     if not _COUNTRY_RE.fullmatch(code):
         raise ConfigurationError(
-            "Invalid country code: expected a short lowercase code such as 'bf', 'bj' or 'sn'."
+            "Invalid country code: expected two letters such as 'bf', 'bj' or 'sn'."
         )
     return code
 
@@ -212,4 +212,15 @@ def path_segment(value: object, name: str = "id") -> str:
         raise ConfigurationError(f"`{name}` is too long (max {_MAX_SEGMENT_LENGTH} characters).")
     if value in (".", "..") or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value):
         raise ConfigurationError(f"`{name}` contains characters that are not allowed in an id.")
+    if "?" in value or "#" in value:
+        raise ConfigurationError(
+            f'`{name}` must not contain "?" or "#": no barkapay identifier does.'
+        )
+    if "/" in value:
+        # Encoded or not, the API's router splits on it: the lookup could only
+        # answer a misleading 404.
+        raise ConfigurationError(
+            f'`{name}` contains "/" and cannot be looked up in a URL. '
+            "For an order id, filter a list instead: list({'order_id': ...})."
+        )
     return quote(value, safe="")

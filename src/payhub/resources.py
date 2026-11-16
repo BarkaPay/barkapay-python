@@ -318,7 +318,7 @@ class Operators:
         ``{"operational": bool, "services": {country: {operator: {"payment":
         {"status", "reason", "updated_at"}, "transfer": {…}}}}}``
         """
-        return self._api.request("GET", "operators/availability", country=country).data or {}
+        return self._api.request("GET", "operators/availability", country=country).require_data()
 
     def info(self, country: str | None = None) -> dict[str, Any]:
         """Operator capabilities (OTP requirement, amount bounds, instructions).
@@ -327,7 +327,7 @@ class Operators:
         ``{"operators": {country: {operator: {"otp_required", "min_amount",
         "max_amount", "pay_delay", "payment_instructions"}}}, "supported_countries": […]}``
         """
-        return self._api.request("GET", "operators/info", country=country).data or {}
+        return self._api.request("GET", "operators/info", country=country).require_data()
 
 
 def _otp(otp: object) -> str:
