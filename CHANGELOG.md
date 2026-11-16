@@ -73,7 +73,7 @@ every 1.0.0 call keeps its signature.
   raised to the caller) and backoff is jittered.
 - `UrllibTransport(context=…)` for a custom (verifying) CA bundle.
 - `ConfigurationError` is now also a `ValueError`.
-- Python 3.13 is tested and declared.
+- Python 3.13 and 3.14 are tested and declared.
 
 ### Changed
 

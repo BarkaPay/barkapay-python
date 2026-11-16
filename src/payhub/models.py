@@ -18,7 +18,6 @@ from typing import Any
 
 from ._util import (
     as_amount,
-    as_bool,
     as_dict,
     as_int,
     as_list_of_dict,
@@ -314,8 +313,8 @@ class PaymentLink:
     payer: dict[str, Any] | None
     #: Which extra fields the checkout asks for (``required`` / ``optional`` / ``off``).
     collect: dict[str, Any]
-    #: Whether the payer receives the invoice e-mail (``notify.email_invoice``).
-    notify_email_invoice: bool | None
+    #: ``{"email_invoice": bool}`` — whether the payer receives the invoice e-mail.
+    notify: dict[str, Any]
     expires_at: str | None
     stats: PaymentLinkStats
     #: For a paid single-use link: the payment that closed it.
@@ -342,7 +341,7 @@ class PaymentLink:
             restrictions=as_dict(data, "restrictions"),
             payer=as_dict(data, "payer"),
             collect=as_dict(data, "collect") or {},
-            notify_email_invoice=as_bool(as_dict(data, "notify") or {}, "email_invoice"),
+            notify=as_dict(data, "notify") or {},
             expires_at=as_str(data, "expires_at"),
             stats=PaymentLinkStats.from_dict(as_dict(data, "stats") or {}),
             paid_by_payment_public_id=as_str(data, "paid_by_payment_public_id"),
