@@ -1,6 +1,13 @@
 # barkapay Python SDK
 
-Official Python client for the [barkapay API](https://payhub.africa/developers) —
+> **This package is renamed.** `barkapay-payhub` (import `payhub`) receives no
+> further release. Install **[`barkapay`](https://pypi.org/project/barkapay/)**
+> instead — `pip install "barkapay>=2,<3"`, then `import barkapay` and
+> `barkapay.BarkaPay(...)` in place of `payhub.PayHub(...)`. 2.0 is the same SDK
+> under its final name; the migration takes a search and replace:
+> https://github.com/BarkaPay/barkapay-python#upgrading-from-1x
+
+Official Python client for the [barkapay API](https://barkapay.com/developers) —
 mobile money collections, payment links and disbursements behind one contract
 (Burkina Faso, Bénin, Sénégal).
 

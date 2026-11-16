@@ -28,8 +28,8 @@ def test_user_agent_carries_sdk_and_python_versions() -> None:
 
 
 def test_version_is_1_1_0() -> None:
-    assert __version__ == "1.1.0"
-    assert PayHub.VERSION == "1.1.0"
+    assert __version__ == "1.1.1"
+    assert PayHub.VERSION == "1.1.1"
 
 
 def test_default_base_url_is_the_public_hub() -> None:

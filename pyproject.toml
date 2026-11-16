@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "barkapay-payhub"
-description = "Official Python client for the barkapay API — mobile money collections, payment links and disbursements. Import as `payhub`."
+description = "Renamed: install `barkapay` instead. Official Python client for the barkapay API — mobile money collections, payment links and disbursements. Import as `payhub`."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
@@ -23,7 +23,7 @@ keywords = [
 ]
 # No "License ::" classifier: the SPDX `license` expression above replaces it (PEP 639).
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 7 - Inactive",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",

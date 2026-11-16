@@ -430,5 +430,5 @@ def test_end_to_end_through_the_client(servers: list[HTTPServer]) -> None:
     seen = recorder.requests[0]["headers"]
     assert seen["authorization"] == f"Bearer {KEY}"
     assert seen["accept"] == "application/json"
-    assert seen["user-agent"].startswith("payhub-python/1.1.0 python/")
+    assert seen["user-agent"].startswith("payhub-python/1.1.1 python/")
     assert len(seen["x-request-id"]) == 36

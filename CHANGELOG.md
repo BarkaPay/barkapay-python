@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-16
+
+Final release of `barkapay-payhub`: the SDK is renamed **`barkapay`** (import
+`barkapay`) from 2.0.0 on. No code change from 1.1.0 — this release only puts
+the rename notice on the PyPI page. Upgrade with
+`pip uninstall barkapay-payhub && pip install "barkapay>=2,<3"`.
+
 ## [1.1.0] - 2026-11-16
 
 No public name was removed or renamed and every 1.0.0 call keeps its
@@ -151,6 +158,7 @@ signature. Several behaviours are deliberately stricter or safer — read
 - Zero-dependency `urllib` transport with automatic retries on 429/503/network,
   and an injectable `Transport` for tests.
 
-[Unreleased]: https://github.com/BarkaPay/payhub-python/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/BarkaPay/payhub-python/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/BarkaPay/payhub-python/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/BarkaPay/payhub-python/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/BarkaPay/payhub-python/releases/tag/v1.0.0
