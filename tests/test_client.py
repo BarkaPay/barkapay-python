@@ -56,6 +56,63 @@ def test_create_payment_builds_signed_country_scoped_request() -> None:
     assert body["operator"] == "ORANGE"
 
 
+def _ok_payment(status: str = "PROCESSING_OPERATOR") -> FakeTransport:
+    return FakeTransport(
+        [
+            json_response(
+                202,
+                {"status": "success", "data": {"payment": {"public_id": "p1", "status": status}}},
+            )
+        ]
+    )
+
+
+def test_create_payment_sends_return_and_cancel_urls_when_given() -> None:
+    http = _ok_payment()
+    client = BarkaPay(api_key="k:s", country="bf", max_retries=0, transport=http)
+
+    client.payments.create(
+        {
+            "operator": "WAVE",
+            "phone_number": "771234567",
+            "amount": 1000,
+            "order": {"id": "O1"},
+            "return_url": "https://shop.example/thanks?cart=42",
+            "cancel_url": "https://shop.example/cart",
+        },
+        country="sn",
+    )
+
+    request = http.last_request
+    assert request is not None
+    assert request.url == "https://hub.barkapay.com/sn/v1/payments"
+    assert request.body is not None
+    body = json.loads(request.body)
+    assert body["return_url"] == "https://shop.example/thanks?cart=42"
+    assert body["cancel_url"] == "https://shop.example/cart"
+
+
+def test_create_payment_omits_return_and_cancel_urls_when_not_given() -> None:
+    http = _ok_payment("SUCCESSFUL")
+    client = BarkaPay(api_key="k:s", country="bf", max_retries=0, transport=http)
+
+    client.payments.create(
+        {
+            "operator": "ORANGE",
+            "phone_number": "74123456",
+            "amount": 100,
+            "otp": "123456",
+            "order": {"id": "O1"},
+        }
+    )
+
+    request = http.last_request
+    assert request is not None and request.body is not None
+    body = json.loads(request.body)
+    assert "return_url" not in body
+    assert "cancel_url" not in body
+
+
 def test_country_can_be_overridden_per_call() -> None:
     http = FakeTransport([json_response(200, {"status": "success", "data": {}})])
     client = BarkaPay(api_key="k:s", country="bf", max_retries=0, transport=http)

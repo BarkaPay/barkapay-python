@@ -39,6 +39,19 @@ class Payments:
         (a 6-digit string) for operators that take the payer's code up-front
         (ORANGE in Burkina Faso and Sénégal).
 
+        Optional ``return_url`` and ``cancel_url``: where an operator that
+        redirects the payer (WAVE in Sénégal today; the others accept and
+        ignore them) sends them back — ``cancel_url`` after a failure or a
+        cancellation, ``return_url`` otherwise (and as the fallback). Absolute
+        ``https`` URLs of at most 2000 characters, without credentials or
+        ``#fragment``: the API answers 422
+        (:class:`~barkapay.errors.ValidationError`, ``errors["return_url"]``)
+        otherwise. Left out, the URLs set on your API application apply, else a
+        barkapay page. The API appends ``payment_id`` and ``order_id`` to the
+        query string, never a status: the payer coming back is **not** a proof
+        of payment — wait for the webhook or call :meth:`get`. Neither field is
+        echoed back on the payment.
+
         Branch on the returned ``status``: ``SUCCESSFUL`` (settled),
         ``AWAITING_OTP`` (call :meth:`confirm_otp`) or ``PROCESSING_OPERATOR``
         (the verdict comes by webhook; open ``redirect_url`` when set). The
