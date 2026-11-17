@@ -47,6 +47,42 @@ def test_validation_error_maps_and_exposes_fields() -> None:
     assert err.errors == {"operator": ["Unknown operator."]}
 
 
+def test_refused_return_url_is_reported_per_field() -> None:
+    client = _client(
+        json_response(
+            422,
+            {
+                "status": "failed",
+                "code": "validation_error",
+                "message": "The return url must be a valid absolute URL using the https scheme.",
+                "errors": {
+                    "return_url": [
+                        "The return url must be a valid absolute URL using the https scheme."
+                    ],
+                    "cancel_url": ["The cancel url must not contain a fragment (#…)."],
+                },
+            },
+        )
+    )
+
+    with pytest.raises(ValidationError) as exc_info:
+        client.payments.create(
+            {
+                "operator": "WAVE",
+                "return_url": "http://shop.example",
+                "cancel_url": "https://shop.example/#x",
+            }
+        )
+
+    err = exc_info.value
+    assert err.http_status == 422
+    assert err.code == "validation_error"
+    assert err.errors["return_url"] == [
+        "The return url must be a valid absolute URL using the https scheme."
+    ]
+    assert err.errors["cancel_url"] == ["The cancel url must not contain a fragment (#…)."]
+
+
 def test_authentication_error() -> None:
     client = _client(
         json_response(
